@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Dashboard personale — Allenamenti e Entrate" />
+  <title>La mia Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── HEADER ── -->
+  <header class="site-header">
+    <div class="header-inner">
+      <span class="header-logo">◈</span>
+      <span class="header-title">La mia Dashboard</span>
+      <span class="header-date" id="headerDate"></span>
+    </div>
+  </header>
+
+  <!-- ── HOMEPAGE ── -->
+  <main id="pageHome" class="page active">
+
+    <section class="hero">
+      <p class="hero-eyebrow">Benvenuto</p>
+      <h1 class="hero-heading">La mia<br>Dashboard</h1>
+      <p class="hero-sub">Allenamento e finanze in un posto solo.</p>
+    </section>
+
+    <section class="cards-grid">
+
+      <!-- Card Allenamenti -->
+      <article class="card" id="cardWorkout" tabindex="0" role="button" aria-label="Apri sezione Allenamenti">
+        <div class="card-icon">💪</div>
+        <div class="card-body">
+          <h2 class="card-title">Allenamenti</h2>
+          <p class="card-desc">Programma giornaliero, esercizi spiegati e tracker progressi.</p>
+        </div>
+        <div class="card-arrow">→</div>
+        <div class="card-glow workout-glow"></div>
+      </article>
+
+      <!-- Card Entrate -->
+      <article class="card" id="cardIncome" tabindex="0" role="button" aria-label="Apri sezione Entrate">
+        <div class="card-icon">💶</div>
+        <div class="card-body">
+          <h2 class="card-title">Entrate</h2>
+          <p class="card-desc">Visualizza guadagni mensili, aggiungi movimenti, tieni traccia.</p>
+        </div>
+        <div class="card-arrow">→</div>
+        <div class="card-glow income-glow"></div>
+      </article>
+
+    </section>
+
+    <!-- Quick stats strip -->
+    <section class="stats-strip" id="statsStrip">
+      <div class="stat-item">
+        <span class="stat-value" id="statWorkouts">0</span>
+        <span class="stat-label">Allenamenti</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-value" id="statStreak">0</span>
+        <span class="stat-label">Giorni di fila</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-value" id="statIncome">€ 0</span>
+        <span class="stat-label">Entrate mese</span>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── PAGINA ALLENAMENTI ── -->
+  <main id="pageWorkout" class="page">
+
+    <div class="page-header">
+      <button class="back-btn" data-target="pageHome">← Indietro</button>
+      <h1 class="page-title">Allenamenti</h1>
+    </div>
+
+    <!-- Selezione giorno -->
+    <div class="day-tabs" role="tablist" aria-label="Giorni della settimana">
+      <button class="day-tab active" data-day="0" role="tab">Lun</button>
+      <button class="day-tab" data-day="1" role="tab">Mar</button>
+      <button class="day-tab" data-day="2" role="tab">Mer</button>
+      <button class="day-tab" data-day="3" role="tab">Gio</button>
+      <button class="day-tab" data-day="4" role="tab">Ven</button>
+      <button class="day-tab" data-day="5" role="tab">Sab</button>
+      <button class="day-tab" data-day="6" role="tab">Dom</button>
+    </div>
+
+    <!-- Contenuto giorno -->
+    <div id="dayContent" class="day-content"></div>
+
+    <!-- Storico completamenti -->
+    <div class="section-block">
+      <h2 class="section-heading">Storico</h2>
+      <div id="workoutHistory" class="history-list"></div>
+    </div>
+
+  </main>
+
+  <!-- ── PAGINA ENTRATE ── -->
+  <main id="pageIncome" class="page">
+
+    <div class="page-header">
+      <button class="back-btn" data-target="pageHome">← Indietro</button>
+      <h1 class="page-title">Entrate</h1>
+    </div>
+
+    <!-- Totale mese -->
+    <div class="income-hero">
+      <p class="income-eyebrow" id="incomeMonthLabel"></p>
+      <p class="income-total" id="incomeTotal">€ 0,00</p>
+      <p class="income-sub">totale del mese corrente</p>
+    </div>
+
+    <!-- Form aggiungi -->
+    <div class="section-block">
+      <h2 class="section-heading">Aggiungi movimento</h2>
+      <form class="income-form" id="incomeForm" novalidate>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="incomeDesc">Descrizione</label>
+            <input class="form-input" id="incomeDesc" type="text" placeholder="Es. Stipendio, Freelance…" maxlength="60" required />
+          </div>
+          <div class="form-group form-group--small">
+            <label class="form-label" for="incomeAmount">Importo (€)</label>
+            <input class="form-input" id="incomeAmount" type="number" placeholder="0.00" min="0" step="0.01" required />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="incomeDate">Data</label>
+            <input class="form-input" id="incomeDate" type="date" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="incomeCategory">Categoria</label>
+            <select class="form-input form-select" id="incomeCategory">
+              <option value="lavoro">💼 Lavoro</option>
+              <option value="freelance">💻 Freelance</option>
+              <option value="investimenti">📈 Investimenti</option>
+              <option value="altro">📦 Altro</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn-primary" type="submit">Aggiungi entrata</button>
+      </form>
+    </div>
+
+    <!-- Lista movimenti -->
+    <div class="section-block">
+      <div class="section-heading-row">
+        <h2 class="section-heading">Movimenti</h2>
+        <button class="btn-ghost btn-small" id="clearIncomeBtn">Cancella tutto</button>
+      </div>
+      <div id="incomeList" class="income-list"></div>
+    </div>
+
+    <!-- Grafico categorie -->
+    <div class="section-block">
+      <h2 class="section-heading">Per categoria</h2>
+      <div id="categoryChart" class="category-chart"></div>
+    </div>
+
+  </main>
+
+  <!-- ── MODAL ESERCIZIO ── -->
+  <div id="exerciseModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-box">
+      <button class="modal-close" id="modalClose" aria-label="Chiudi">✕</button>
+      <div id="modalContent"></div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
