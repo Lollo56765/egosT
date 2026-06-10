@@ -258,8 +258,17 @@ function saveState() {
 }
 
 // ===== UTILS =====
+// Usa formato locale YYYY-MM-DD per evitare sfasamenti UTC
 function dateKey(d) {
-  return d.toISOString().split('T')[0];
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+// Parsare una chiave "YYYY-MM-DD" come data locale (non UTC)
+function parseKey(k) {
+  const [y, m, d] = k.split('-').map(Number);
+  return new Date(y, m - 1, d);
 }
 function today() { return new Date(); }
 function todayKey() { return dateKey(today()); }
@@ -288,7 +297,7 @@ function totalWorkouts() {
 function totalRuns() {
   return Object.entries(state.workoutLog).filter(([k,v]) => {
     if (v !== 'done') return false;
-    const d = new Date(k); const dow = d.getDay();
+    const d = parseKey(k); const dow = d.getDay();
     return WORKOUT_PLAN[dow] && WORKOUT_PLAN[dow].type === 'run';
   }).length;
 }
@@ -456,7 +465,7 @@ function renderRecentHistory() {
   }
   let html = '';
   entries.forEach(([k,v]) => {
-    const d = new Date(k); const plan = WORKOUT_PLAN[d.getDay()];
+    const d = parseKey(k); const plan = WORKOUT_PLAN[d.getDay()];
     const color = v === 'done' ? '#10b981' : '#ef4444';
     const icon = v === 'done' ? '✅' : '❌';
     html += `<div class="history-item">
@@ -516,7 +525,7 @@ function renderCalendar() {
 }
 
 function openDayModal(dateStr) {
-  const d = new Date(dateStr);
+  const d = parseKey(dateStr);
   const dow = d.getDay();
   const plan = WORKOUT_PLAN[dow];
   const status = state.workoutLog[dateStr];
@@ -810,7 +819,7 @@ function renderStats() {
   // Rest days taken
   Object.entries(state.workoutLog).forEach(([k,v]) => {
     if (v === 'done') {
-      const d = new Date(k);
+      const d = parseKey(k);
       if (WORKOUT_PLAN[d.getDay()]?.type === 'rest') restDays++;
     }
   });
@@ -818,7 +827,7 @@ function renderStats() {
   let rCount = 0;
   const log = state.workoutLog;
   Object.keys(log).forEach(k => {
-    const d = new Date(k); if (d.getDay()===0) rCount++;
+    const d = parseKey(k); if (d.getDay()===0) rCount++;
   });
 
   document.getElementById('s_workouts').textContent = totalWorkouts();
@@ -1002,7 +1011,7 @@ function diaryToday() {
 }
 function loadDiaryEntry() {
   const k = document.getElementById('diaryDate').value;
-  const d = new Date(k);
+  const d = parseKey(k);
   document.getElementById('diaryDayLabel').textContent = `${DAYS_IT[d.getDay()]}, ${d.getDate()} ${MONTHS_IT[d.getMonth()]} ${d.getFullYear()}`;
   const entry = state.diary[k] || '';
   document.getElementById('diaryEntry').value = entry;
@@ -1029,7 +1038,7 @@ function renderRecentDiary() {
   if (!entries.length) { document.getElementById('recentDiaryEntries').innerHTML = '<div class="text-xs">Nessuna nota ancora. Inizia a scrivere!</div>'; return; }
   let html = '';
   entries.forEach(([k,v]) => {
-    const d = new Date(k);
+    const d = parseKey(k);
     html += `<div class="history-item">
       <div style="flex:1">
         <div class="text-xs" style="color:var(--accent)">${DAYS_IT[d.getDay()]} ${d.getDate()} ${MONTHS_IT[d.getMonth()]}</div>
