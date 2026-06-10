@@ -1,842 +1,1089 @@
-/* =========================================================
-   egosDashboard — script.js
-   Gestisce: navigazione, allenamenti, entrate, localStorage
-   ========================================================= */
-
-'use strict';
-
-// ── Utility ──────────────────────────────────────────────
-
-/** Formatta un numero come valuta italiana */
-function formatCurrency(n) {
-  return '€ ' + Number(n).toLocaleString('it-IT', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
-}
-
-/** Formatta una data ISO in formato leggibile */
-function formatDate(iso) {
-  const d = new Date(iso);
-  return d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' });
-}
-
-/** Data di oggi in formato YYYY-MM-DD */
-function todayISO() {
-  return new Date().toISOString().split('T')[0];
-}
-
-/** Genera un ID univoco semplice */
-function uid() {
-  return Math.random().toString(36).slice(2, 10);
-}
-
-
-// ── LocalStorage helpers ──────────────────────────────────
-
-function loadKey(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw !== null ? JSON.parse(raw) : fallback;
-  } catch { return fallback; }
-}
-
-function saveKey(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* quota */ }
-}
-
-
-// ── Dati allenamento ─────────────────────────────────────
-
-const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
-
-const WORKOUT_PLAN = [
-  // Lunedì — Petto, Spalle, Tricipiti
-  {
-    focus: 'Petto · Spalle · Tricipiti',
-    type: 'strength',
+// ===== DATA =====
+const WORKOUT_PLAN = {
+  1: { // Monday
+    name: "Petto, Spalle, Tricipiti",
+    type: "strength",
+    emoji: "💪",
+    color: "#2563eb",
     exercises: [
-      {
-        name: 'Piegamenti', icon: '💪', sets: '4 × max',
-        muscles: ['Petto', 'Tricipiti', 'Spalle'],
-        desc: 'L\'esercizio fondamentale per il petto a corpo libero. Coinvolge petto, tricipiti e deltoide anteriore in modo sinergico.',
-        steps: [
-          'Mani leggermente più larghe delle spalle, corpo rettilineo.',
-          'Contrai addome e glutei come se fossi in plank.',
-          'Abbassa il petto quasi fino al suolo in 2-3 secondi.',
-          'Spingi via esplosivamente tornando alla posizione alta.',
-          'Non bloccare i gomiti: mantieni una leggerissima flessione.'
-        ],
-        tip: 'Per aumentare la difficoltà alza i piedi su una sedia; per facilitare, usa le ginocchia.',
-        difficulty: 'Base'
-      },
-      {
-        name: 'Distensioni manubri', icon: '🏋️', sets: '4 × 8–12',
-        muscles: ['Petto', 'Spalle'],
-        desc: 'Distensioni su panca o pavimento con manubri: permette un arco di movimento più ampio rispetto al bilanciere, massimizzando l\'allungamento del grande pettorale.',
-        steps: [
-          'Sdraiato, piedi piatti. Manubri ai lati del petto, palme avanti.',
-          'Spingi i pesi verso il soffitto convergendo leggermente nella salita.',
-          'Contrai il petto in cima — pensa di «abbracciare un albero».',
-          'Abbassa lentamente fino a sentire lo stretch, gomiti a 45–60° dal busto.'
-        ],
-        tip: 'Respira dentro nella discesa, soffia fuori durante la spinta.',
-        difficulty: 'Intermedio'
-      },
-      {
-        name: 'Croci con manubri', icon: '🦅', sets: '3 × 10–12',
-        muscles: ['Petto'],
-        desc: 'Esercizio di isolamento per il grande pettorale, in particolare la parte mediale. Ideale come esercizio di finitura dopo le distensioni.',
-        steps: [
-          'Partenza con manubri sopra il petto, palme affacciate.',
-          'Apri le braccia lateralmente mantenendo i gomiti leggermente piegati.',
-          'Scendi finché i gomiti sono al livello delle spalle.',
-          'Riporta i manubri in cima con un arco ampio, come se abbracciassi qualcuno di grande.'
-        ],
-        tip: 'Usa carichi leggeri e concentrati sulla sensazione nel petto, non sul peso sollevato.',
-        difficulty: 'Intermedio'
-      },
-      {
-        name: 'Alzate laterali', icon: '🙆', sets: '3 × 12',
-        muscles: ['Spalle (laterale)'],
-        desc: 'Esercizio di isolamento per il capo laterale del deltoide. Crea larghezza visiva alle spalle.',
-        steps: [
-          'In piedi, manubri ai fianchi, palme verso il corpo.',
-          'Gomiti leggermente piegati per tutto il movimento.',
-          'Alza le braccia lateralmente fino all\'altezza delle spalle (non oltre).',
-          'Abbassa in 2 secondi controllando la discesa.',
-          'Non oscillare il busto: il movimento viene solo dalle spalle.'
-        ],
-        tip: 'Ruota i mignoli leggermente verso l\'alto durante la salita — come se stessi versando acqua da due tazze.',
-        difficulty: 'Base'
-      },
-      {
-        name: 'Dip', icon: '⬇️', sets: '3 × max',
-        muscles: ['Tricipiti', 'Petto inferiore'],
-        desc: 'Esercizio composto eccellente per tricipiti e petto inferiore. Può essere fatto tra due sedie se non hai le parallele.',
-        steps: [
-          'Appoggiati sulle parallele o sul bordo di due sedie, gomiti estesi.',
-          'Inclina il busto leggermente in avanti per enfatizzare il petto.',
-          'Abbassa fino a quando i gomiti formano ~90°.',
-          'Spingi via fino quasi all\'estensione completa, senza bloccare.',
-          'Non abbassarti eccessivamente: mantieni il controllo.'
-        ],
-        tip: 'Se è troppo duro, inizia con i piedi a terra. Se è troppo facile, aggiungi un peso sulle cosce.',
-        difficulty: 'Avanzato'
-      },
-      {
-        name: 'Plank', icon: '🧱', sets: '3 × 60 s',
-        muscles: ['Core', 'Addominali', 'Lombari'],
-        desc: 'Esercizio isometrico per la stabilità del core. Lavora contemporaneamente addominali, obliqui, lombari e glutei.',
-        steps: [
-          'Appoggiati sugli avambracci e le punte dei piedi.',
-          'Corpo perfettamente rettilineo: no all\'arco lombare, no al sedere alto.',
-          'Contrai addome come se aspettassi un pugno, glutei stretti.',
-          'Guarda verso il suolo, collo in posizione neutra.',
-          'Respira regolarmente per tutto il tempo.'
-        ],
-        tip: 'Per rendere più difficile: solleva alternativamente una gamba di 5 cm, o porta un ginocchio verso il gomito.',
-        difficulty: 'Base'
-      }
+      { name: "Piegamenti", sets: "4×max", muscles: ["Petto","Tricipiti","Spalle"], diff: 1 },
+      { name: "Distensioni manubri", sets: "4×8-12", muscles: ["Petto","Spalle"], diff: 2 },
+      { name: "Croci", sets: "3×10-12", muscles: ["Petto"], diff: 2 },
+      { name: "Alzate laterali", sets: "3×12", muscles: ["Spalle"], diff: 1 },
+      { name: "Dip", sets: "3×max", muscles: ["Tricipiti","Petto"], diff: 2 },
+      { name: "Plank", sets: "3×60 sec", muscles: ["Core","Addominali"], diff: 1 },
     ]
   },
-
-  // Martedì — Corsa
-  {
-    focus: 'Cardio · Resistenza',
-    type: 'run',
-    duration: '30–40 minuti',
+  2: { // Tuesday
+    name: "Corsa",
+    type: "run",
+    emoji: "🏃",
+    color: "#059669",
+    detail: "30-40 minuti",
+    exercises: []
+  },
+  3: { // Wednesday
+    name: "Schiena, Bicipiti, Addominali",
+    type: "strength",
+    emoji: "💪",
+    color: "#7c3aed",
     exercises: [
-      {
-        name: 'Corsa continua', icon: '🏃', sets: '30–40 min',
-        muscles: ['Gambe', 'Cuore', 'Polmoni'],
-        desc: 'Corsa a ritmo moderato e costante. Obiettivo: mantenere un passo che ti permetta di pronunciare frasi brevi senza affannarti.',
-        steps: [
-          '5 min di camminata veloce come riscaldamento.',
-          'Aumenta gradualmente il passo nei primi 5 minuti.',
-          'Mantieni un ritmo conversazionale per 20–30 min.',
-          'Ultimi 5 min: diminuisci il passo, poi cammina 5 min.',
-          'Termina con 5 min di stretching leggero a gambe e polpacci.'
-        ],
-        tip: 'Se è troppo duro correre per tutto il tempo, alterna 2 min di corsa e 1 min di camminata. Costruisci il volume settimana per settimana.',
-        difficulty: 'Base'
-      }
+      { name: "Trazioni", sets: "4×max", muscles: ["Schiena","Bicipiti"], diff: 3 },
+      { name: "Rematore", sets: "4×10", muscles: ["Schiena","Bicipiti"], diff: 2 },
+      { name: "Curl bicipiti", sets: "3×10-12", muscles: ["Bicipiti"], diff: 1 },
+      { name: "Curl martello", sets: "3×10", muscles: ["Bicipiti","Avambracci"], diff: 1 },
+      { name: "Sollevamento gambe", sets: "3×15", muscles: ["Addominali","Core"], diff: 2 },
+      { name: "Crunch", sets: "3×20", muscles: ["Addominali"], diff: 1 },
     ]
   },
-
-  // Mercoledì — Schiena, Bicipiti, Addominali
-  {
-    focus: 'Schiena · Bicipiti · Addominali',
-    type: 'strength',
+  4: { // Thursday
+    name: "Corsa",
+    type: "run",
+    emoji: "🏃",
+    color: "#059669",
+    detail: "30 minuti",
+    exercises: []
+  },
+  5: { // Friday
+    name: "Gambe e Core",
+    type: "strength",
+    emoji: "🦵",
+    color: "#dc2626",
     exercises: [
-      {
-        name: 'Trazioni', icon: '🏗️', sets: '4 × max',
-        muscles: ['Dorsali', 'Bicipiti', 'Core'],
-        desc: 'Re degli esercizi per la schiena. Richiede una sbarra fissa. Coinvolge praticamente tutta la muscolatura della parte alta del dorso.',
-        steps: [
-          'Presa prona (palme avanti), distanza spalle o leggermente oltre.',
-          'Parti da braccia quasi estese, scapole leggermente depresse.',
-          'Tira i gomiti verso i fianchi — non verso le orecchie.',
-          'Porta il mento sopra la sbarra senza ruotare il collo.',
-          'Abbassa lentamente fino quasi all\'estensione in 3 secondi.'
-        ],
-        tip: 'Se non riesci ancora, usa un elastico sotto i piedi come assistenza, oppure fai le negative: sali con un salto e abbassati il più lentamente possibile.',
-        difficulty: 'Avanzato'
-      },
-      {
-        name: 'Rematore con manubrio', icon: '🚣', sets: '4 × 10',
-        muscles: ['Dorsali', 'Romboidi', 'Bicipiti'],
-        desc: 'Esercizio fondamentale per lo spessore della schiena. Si esegue un braccio alla volta appoggiandosi a una panca o sedia.',
-        steps: [
-          'Ginocchio e mano dello stesso lato appoggiate sulla panca.',
-          'Schiena parallela al suolo, colonna neutra.',
-          'Tieni il manubrio con il braccio libero, palma verso di te.',
-          'Tira il gomito verso il soffitto — gomito vicino al busto.',
-          'Abbassa lentamente, lascia che la scapola scivoli in avanti.'
-        ],
-        tip: 'Pensa di avviare il movimento con il gomito, non con la mano. Concentrati sulla scapola che si avvicina alla colonna.',
-        difficulty: 'Intermedio'
-      },
-      {
-        name: 'Curl bicipiti', icon: '💪', sets: '3 × 10–12',
-        muscles: ['Bicipiti', 'Brachiale'],
-        desc: 'Esercizio classico per i bicipiti. Semplice ma efficace se fatto con il giusto controllo.',
-        steps: [
-          'In piedi, manubri ai fianchi, palme avanti.',
-          'Gomiti fermi ai fianchi — non devono spostarsi.',
-          'Porta i manubri verso le spalle in 1 secondo.',
-          'Fai una pausa di mezzo secondo in cima.',
-          'Abbassa in 2–3 secondi, quasi fino all\'estensione.'
-        ],
-        tip: 'La fase di discesa (eccentrica) è importante quanto la salita. Non lanciare i pesi giù.',
-        difficulty: 'Base'
-      },
-      {
-        name: 'Curl martello', icon: '🔨', sets: '3 × 10',
-        muscles: ['Brachiale', 'Brachioradiale'],
-        desc: 'Variante del curl con presa neutra (palme affacciate). Isola meglio il brachiale e aggiunge spessore al braccio.',
-        steps: [
-          'In piedi, manubri ai fianchi, palme affacciate (come un martello).',
-          'Senza ruotare il polso, porta il manubrio verso la spalla.',
-          'Mantenere il gomito fermo al fianco.',
-          'Abbassa lentamente e controlla la discesa.'
-        ],
-        tip: 'Puoi fare i due lati in alternanza per mantenere la concentrazione su ogni braccio.',
-        difficulty: 'Base'
-      },
-      {
-        name: 'Sollevamento gambe', icon: '🦵', sets: '3 × 15',
-        muscles: ['Addominali bassi', 'Flessori anca'],
-        desc: 'Esercizio per gli addominali inferiori. Si esegue sdraiati, sollevando entrambe le gambe.',
-        steps: [
-          'Sdraiato, braccia ai fianchi o sotto i glutei per supporto.',
-          'Gambe dritte (o leggermente piegate), talloni a 2–3 cm da terra.',
-          'Contrai gli addominali bassi e porta le gambe a 90°.',
-          'Abbassa lentamente senza toccare il suolo.',
-          'Tieni la schiena bassa incollata al pavimento per tutto il movimento.'
-        ],
-        tip: 'Se senti la schiena bassa sollevarsi, piega leggermente le ginocchia.',
-        difficulty: 'Intermedio'
-      },
-      {
-        name: 'Crunch', icon: '🔥', sets: '3 × 20',
-        muscles: ['Retto addominale'],
-        desc: 'L\'esercizio classico per il retto addominale. Breve escursione di movimento, ma con massima contrazione.',
-        steps: [
-          'Sdraiato, ginocchia piegate, piedi piatti al suolo.',
-          'Mani dietro la nuca — non tirare il collo.',
-          'Stacca scapole e spalle dal pavimento di circa 30°.',
-          'Contrai gli addominali nel punto più alto.',
-          'Abbassa lentamente mantenendo tensione nel core.'
-        ],
-        tip: 'Immagina di voler avvicinare le costole al bacino, non di portare il mento al ginocchio.',
-        difficulty: 'Base'
-      }
+      { name: "Squat", sets: "4×12-15", muscles: ["Quadricipiti","Glutei","Hamstring"], diff: 2 },
+      { name: "Affondi", sets: "3×10", muscles: ["Quadricipiti","Glutei"], diff: 2 },
+      { name: "Stacco rumeno", sets: "4×10", muscles: ["Hamstring","Glutei","Schiena"], diff: 3 },
+      { name: "Calf raise", sets: "4×20", muscles: ["Polpacci"], diff: 1 },
+      { name: "Plank", sets: "3×60 sec", muscles: ["Core","Addominali"], diff: 1 },
+      { name: "Russian Twist", sets: "3×20", muscles: ["Addominali","Core"], diff: 2 },
     ]
   },
-
-  // Giovedì — Corsa
-  {
-    focus: 'Cardio · Resistenza',
-    type: 'run',
-    duration: '30 minuti',
-    exercises: [
-      {
-        name: 'Corsa continua', icon: '🏃', sets: '30 min',
-        muscles: ['Gambe', 'Cuore', 'Polmoni'],
-        desc: 'Sessione di corsa di medio volume. Mantieni un passo regolare e respira ritmicamente.',
-        steps: [
-          '5 min di camminata veloce o corsa blanda di riscaldamento.',
-          'Passo costante per 20 min al ritmo che riesci a mantenere.',
-          'Ultimi 5 min: rallenta gradualmente.',
-          'Stretching finale: quadricipiti, polpacci, flessori dell\'anca.'
-        ],
-        tip: 'Usa il test del discorso: dovresti riuscire a dire una frase di 5–6 parole senza restare senza fiato.',
-        difficulty: 'Base'
-      }
-    ]
+  6: { // Saturday
+    name: "Corsa leggera",
+    type: "run",
+    emoji: "🏃",
+    color: "#059669",
+    detail: "20-30 minuti",
+    exercises: []
   },
-
-  // Venerdì — Gambe e Core
-  {
-    focus: 'Gambe · Core',
-    type: 'strength',
-    exercises: [
-      {
-        name: 'Squat', icon: '🏋️', sets: '4 × 12–15',
-        muscles: ['Quadricipiti', 'Glutei', 'Hamstring'],
-        desc: 'Il re degli esercizi per le gambe. Coinvolge tutta la catena cinetica posteriore e il core come stabilizzatore.',
-        steps: [
-          'Piedi a larghezza spalle, punte leggermente verso l\'esterno.',
-          'Petto alto, sguardo avanti, core contratto.',
-          'Scendi come se volessi sederti su una sedia molto bassa.',
-          'Ginocchia nella direzione delle punte dei piedi — non verso l\'interno.',
-          'Scendi almeno fino a cosce parallele al suolo, poi spingi su.'
-        ],
-        tip: 'Immagina di spingere il pavimento via dai piedi mentre sali, non di alzarti.',
-        difficulty: 'Intermedio'
-      },
-      {
-        name: 'Affondi', icon: '🚶', sets: '3 × 10 (per gamba)',
-        muscles: ['Quadricipiti', 'Glutei', 'Stabilizzatori'],
-        desc: 'Esercizio unilaterale per le gambe: corregge sbilanciamenti tra destra e sinistra, migliora l\'equilibrio.',
-        steps: [
-          'In piedi, piedi uniti. Fai un passo lungo in avanti.',
-          'Abbassa il ginocchio posteriore quasi a terra, tibia verticale.',
-          'Ginocchio anteriore sopra la caviglia, non oltre la punta.',
-          'Spingi sul tallone anteriore per tornare alla posizione di partenza.',
-          'Alterna le gambe o fai tutte le rip con una gamba, poi l\'altra.'
-        ],
-        tip: 'Se perdi l\'equilibrio, inizia con affondi fermi (senza camminare) per acquisire stabilità.',
-        difficulty: 'Intermedio'
-      },
-      {
-        name: 'Stacco rumeno', icon: '⬆️', sets: '4 × 10',
-        muscles: ['Hamstring', 'Glutei', 'Lombari'],
-        desc: 'Esercizio fondamentale per hamstring e glutei. Differisce dallo stacco classico per l\'angolo del ginocchio quasi fisso.',
-        steps: [
-          'In piedi, manubri davanti alle cosce, palme verso di te.',
-          'Gambe quasi dritte, leggerissima flessione al ginocchio.',
-          'Inclina il busto in avanti spingendo i fianchi indietro — schiena rigida.',
-          'Scendi fino a sentire lo stretch negli hamstring (circa metà tibia).',
-          'Contrai i glutei e spingi i fianchi in avanti per tornare su.'
-        ],
-        tip: 'Pensa di dover toccare il muro dietro di te con il sedere, non di piegarti in avanti.',
-        difficulty: 'Intermedio'
-      },
-      {
-        name: 'Calf raise', icon: '👟', sets: '4 × 20',
-        muscles: ['Gastrocnemio', 'Soleo'],
-        desc: 'Esercizio dedicato ai polpacci, spesso trascurati. Fondamentale per la spinta nella corsa e la stabilità della caviglia.',
-        steps: [
-          'In piedi su un gradino o sul pavimento, manubri ai fianchi.',
-          'Abbassa i talloni sotto il livello delle punte (se su gradino).',
-          'Spingi sulle punte il più in alto possibile.',
-          'Tieni la posizione alta per 1 secondo.',
-          'Abbassa lentamente per ottenere il massimo allungamento.'
-        ],
-        tip: 'I polpacci rispondono meglio ad alto volume. Fai le ripetizioni lentamente.',
-        difficulty: 'Base'
-      },
-      {
-        name: 'Plank', icon: '🧱', sets: '3 × 60 s',
-        muscles: ['Core', 'Addominali', 'Lombari'],
-        desc: 'Già presente nel programma di lunedì — la costanza in questo esercizio porta risultati visibili in 4–6 settimane.',
-        steps: [
-          'Avambracci e punte dei piedi a terra.',
-          'Corpo perfettamente rettilineo dalla testa ai talloni.',
-          'Contrai tutto: addome, glutei, cosce.',
-          'Non trattenere il respiro: inspira ed espira con calma.'
-        ],
-        tip: 'Punta a 3 × 60s. Quando diventa facile, prova plank con un braccio o plank laterale.',
-        difficulty: 'Base'
-      },
-      {
-        name: 'Russian Twist', icon: '🌀', sets: '3 × 20',
-        muscles: ['Obliqui', 'Core rotatorio'],
-        desc: 'Esercizio per gli obliqui e la rotazione del tronco. Importante per la stabilità laterale e la potenza nei movimenti sportivi.',
-        steps: [
-          'Seduto a terra, ginocchia piegate a 90°.',
-          'Solleva i piedi di qualche cm (difficoltà maggiore) oppure lasciali a terra.',
-          'Inclina il busto indietro di circa 45°.',
-          'Ruota il busto da destra a sinistra tenendo le mani giunte davanti a te.',
-          'Per aumentare la difficoltà, tieni un peso tra le mani.'
-        ],
-        tip: 'Ogni rotazione completa (destra + sinistra) conta come 1 ripetizione.',
-        difficulty: 'Intermedio'
-      }
-    ]
-  },
-
-  // Sabato — Corsa leggera
-  {
-    focus: 'Corsa leggera · Recupero attivo',
-    type: 'run',
-    duration: '20–30 minuti',
-    exercises: [
-      {
-        name: 'Corsa leggera', icon: '🏃', sets: '20–30 min',
-        muscles: ['Gambe', 'Cuore'],
-        desc: 'Sessione di recupero attivo: ritmo molto blando, quasi come una camminata veloce. Aiuta la circolazione e il recupero muscolare dopo la settimana intensa.',
-        steps: [
-          'Ritmo blandissimo: dovresti sentirti a tuo agio a conversare normalmente.',
-          'Nessuna velocità: l\'obiettivo è il movimento, non la performance.',
-          'Goditi l\'uscita: musica, podcast, o semplicemente la quiete.',
-          'Termina con qualche minuto di stretching.'
-        ],
-        tip: 'Questo è il giorno del recupero — non trasformarlo in un allenamento intenso. Il corpo cresce durante il riposo.',
-        difficulty: 'Base'
-      }
-    ]
-  },
-
-  // Domenica — Riposo
-  {
-    focus: 'Riposo & Recupero',
-    type: 'rest',
+  0: { // Sunday
+    name: "Riposo",
+    type: "rest",
+    emoji: "😴",
+    color: "#d97706",
     exercises: []
   }
+};
+
+const EXERCISE_GUIDE = {
+  "Piegamenti": {
+    desc: "I piegamenti (push-up) sono uno degli esercizi a corpo libero più completi. Lavorano petto, spalle e tricipiti contemporaneamente.",
+    steps: ["Posizione prona con mani leggermente più larghe delle spalle","Corpo rettilineo come una tavola, addome contratto","Piega i gomiti abbassando il petto verso il suolo","Ferma a 1-2 cm dal pavimento","Spingi verso l'alto tornando alla posizione iniziale"],
+    muscles: ["Petto (grande pettorale)","Tricipiti","Spalle (deltoide anteriore)","Core"],
+    errors: ["Bacino che scende o sale troppo","Gomiti aperti oltre 45°","Range di movimento incompleto","Testa che pende in avanti"],
+    diff: 1, recovery: "60 secondi",
+    tips: "Concentrati sulla contrazione del petto spingendo. Per facilitare usa le ginocchia; per intensificare eleva i piedi."
+  },
+  "Distensioni manubri": {
+    desc: "Distensioni su panca o a terra con manubri per sviluppare il petto con maggiore ampiezza di movimento rispetto al bilanciere.",
+    steps: ["Sdraiati su panca o pavimento con manubri a lato","Porta i manubri sopra il petto con palme in avanti","Abbassa lentamente fino a sentire l'allungamento del petto","Premi i manubri verso l'alto senza bloccare i gomiti","Contrai il petto al punto più alto"],
+    muscles: ["Grande pettorale","Tricipiti","Deltoide anteriore"],
+    errors: ["Abbassare troppo velocemente","Non completare la salita","Sollevare i fianchi dalla panca"],
+    diff: 2, recovery: "75 secondi",
+    tips: "Immagina di 'abbracciare un albero' quando spingi su per massimizzare la contrazione."
+  },
+  "Croci": {
+    desc: "Le croci isolano il grande pettorale lavorando principalmente sull'adduzione orizzontale. Ottimo per allargare il petto.",
+    steps: ["Sdraiati con manubri sopra il petto, gomiti leggermente piegati","Apri le braccia lateralmente mantenendo la curva nei gomiti","Scendi finché senti l'allungamento del petto","Riporta le braccia su come se abbracciassi","Contrai il petto nella posizione alta"],
+    muscles: ["Grande pettorale (isolamento)","Deltoide anteriore (secondario)"],
+    errors: ["Stendere troppo i gomiti (rischio tendini)","Usare peso eccessivo","Movimento troppo brusco"],
+    diff: 2, recovery: "60 secondi",
+    tips: "Usa pesi leggeri con focus sulla sensazione nel petto. La qualità batte la quantità."
+  },
+  "Alzate laterali": {
+    desc: "L'esercizio re per sviluppare le spalle laterali, creando larghezza e definizione nella parte superiore del corpo.",
+    steps: ["In piedi con manubri ai lati, palme verso il corpo","Tieni un leggero piegamento nei gomiti","Alza le braccia lateralmente fino all'altezza delle spalle","Mantieni un secondo al punto più alto","Abbassa lentamente resistendo alla gravità"],
+    muscles: ["Deltoide laterale (capo mediale)","Sovraspinato","Trapezio (secondario)"],
+    errors: ["Usare il momentum oscillando il busto","Alzare oltre le spalle","Sollevare le spalle verso le orecchie"],
+    diff: 1, recovery: "60 secondi",
+    tips: "Ruota leggermente il mignolo verso l'alto (come versare acqua) per maggiore attivazione laterale."
+  },
+  "Dip": {
+    desc: "I dip alle parallele sono un esercizio composto premium per tricipiti e petto inferiore. Richiedono forza e stabilità.",
+    steps: ["Afferrare le parallele con corpo sospeso","Abbassarsi piegando i gomiti fino a 90°","Busto leggermente inclinato in avanti per petto, dritto per tricipiti","Spingi verso il basso sulle parallele tornando su","Completa la spinta senza iperestendere i gomiti"],
+    muscles: ["Tricipiti","Petto inferiore","Deltoide anteriore"],
+    errors: ["Abbassarsi troppo (stress sulle spalle)","Non completare la spinta","Oscillare il corpo"],
+    diff: 2, recovery: "90 secondi",
+    tips: "Aggiungi peso con una cintura appena riesci a fare 15 rip facili. Per facilitare usa elastico."
+  },
+  "Plank": {
+    desc: "Il plank è l'esercizio fondamentale per la stabilità del core. Lavora su decine di muscoli contemporaneamente in modo isometrico.",
+    steps: ["Posizione a terra su avambracci e punte dei piedi","Corpo rettilineo dalla testa ai talloni","Contrai addome, glutei e quadricipiti","Mantieni il respiro regolare","Tieni la posizione per il tempo prestabilito"],
+    muscles: ["Retto dell'addome","Trasverso dell'addome","Obliqui","Glutei","Quadricipiti"],
+    errors: ["Bacino alto o basso","Trattenere il respiro","Capo che cade o si alza","Spalle verso le orecchie"],
+    diff: 1, recovery: "45 secondi",
+    tips: "Immagina di spingere i gomiti verso i piedi e i piedi verso i gomiti: questo attiva meglio il core."
+  },
+  "Trazioni": {
+    desc: "Le trazioni (pull-up) sono considerate il re degli esercizi per la schiena a corpo libero. Sviluppano larghezza e spessore.",
+    steps: ["Afferrare la sbarra a presa prona più larga delle spalle","Corpo sospeso, scapole leggermente abbassate","Tira verso il basso le scapole e poi piega i gomiti","Porta il mento sopra la sbarra","Abbassa lentamente controllando il movimento"],
+    muscles: ["Grande dorsale","Bicipiti","Romboidi","Trapezio inferiore"],
+    errors: ["Usare solo i bicipiti senza attivare le scapole","Oscillare il corpo","Non completare l'estensione in basso"],
+    diff: 3, recovery: "120 secondi",
+    tips: "Pensa di portare i gomiti verso i fianchi, non le mani verso le spalle. Usa il lat."
+  },
+  "Rematore": {
+    desc: "Il rematore con manubrio o bilanciere sviluppa spessore nella schiena, lavorando su trapezio, romboidi e dorsale.",
+    steps: ["Posizione inclinata in avanti a 45°, prese a larghezza spalle","Tieni la schiena neutra, non iperestesa","Tira il peso verso il basso del busto","Porta i gomiti indietro, non verso l'alto","Abbassa lentamente mantenendo la tensione"],
+    muscles: ["Grande dorsale","Romboidi","Trapezio","Bicipiti"],
+    errors: ["Arrotondare la schiena bassa","Usare il momentum del busto","Non portare i gomiti indietro"],
+    diff: 2, recovery: "90 secondi",
+    tips: "Inizia ogni ripetizione retraendo le scapole prima di piegare i gomiti."
+  },
+  "Curl bicipiti": {
+    desc: "Il curl standard con manubri o bilanciere è l'esercizio classico per lo sviluppo dei bicipiti.",
+    steps: ["In piedi con manubri ai lati, palme in avanti","Tieni i gomiti fermi vicino ai fianchi","Curva le braccia portando i pesi verso le spalle","Contrai i bicipiti al punto più alto","Abbassa lentamente resistendo alla gravità"],
+    muscles: ["Bicipiti brachiali","Brachiale","Supinatore"],
+    errors: ["Muovere i gomiti in avanti","Oscillare il busto per aiutarsi","Abbassare troppo velocemente"],
+    diff: 1, recovery: "60 secondi",
+    tips: "La fase eccentrica (abbassamento) è altrettanto importante della salita per la crescita muscolare."
+  },
+  "Curl martello": {
+    desc: "Il curl a presa neutra (martello) lavora il bicipite brachiale e il brachioradiale più efficacemente del curl classico.",
+    steps: ["In piedi con manubri ai lati, palme verso l'interno","Tieni il polso in posizione neutra per tutto il movimento","Porta i manubri verso le spalle","Mantieni i gomiti fermi","Abbassa controllato"],
+    muscles: ["Brachiale","Bicipiti brachiali","Brachioradiale"],
+    errors: ["Ruotare il polso durante il movimento","Muovere i gomiti","Usare peso eccessivo"],
+    diff: 1, recovery: "60 secondi",
+    tips: "Alterna le braccia per aumentare la concentrazione su ogni singolo bicipite."
+  },
+  "Sollevamento gambe": {
+    desc: "Il sollevamento gambe da sdraiato o appeso lavora la parte inferiore degli addominali e il flessore dell'anca.",
+    steps: ["Sdraiato sulla schiena, mani sotto i glutei","Mantieni le gambe leggermente piegate","Alza le gambe portando i piedi verso il soffitto","Contrai gli addominali nella posizione alta","Abbassa le gambe senza toccare il suolo"],
+    muscles: ["Retto dell'addome (basso)","Flessore dell'anca","Obliqui"],
+    errors: ["Inarcare eccessivamente la schiena bassa","Abbassare troppo le gambe","Strappare con il collo"],
+    diff: 2, recovery: "45 secondi",
+    tips: "Per variante avanzata: esegui appeso alla sbarra per maggiore ampiezza di movimento."
+  },
+  "Crunch": {
+    desc: "Il crunch classico è l'esercizio base per gli addominali superiori. Semplice ma efficace se eseguito correttamente.",
+    steps: ["Sdraiato, ginocchia piegate a 90°, piedi al suolo","Mani incrociate al petto o dita alle tempie","Contrai gli addominali portando le spalle su","Stacca le scapole dal suolo di circa 30°","Abbassa lentamente senza rilassare completamente"],
+    muscles: ["Retto dell'addome (superiore)","Obliqui (secondario)"],
+    errors: ["Tirare il collo con le mani","Range di movimento eccessivo (non è uno sit-up)","Perdere tensione in basso"],
+    diff: 1, recovery: "45 secondi",
+    tips: "Immagina di accorciare lo spazio tra costole e bacino. Non portare il mento al petto."
+  },
+  "Squat": {
+    desc: "Lo squat è il re degli esercizi per le gambe. Coinvolge quadricipiti, glutei, hamstring e core in un movimento funzionale.",
+    steps: ["In piedi, piedi a larghezza spalle o leggermente oltre","Punte leggermente ruotate verso l'esterno","Inizia il movimento spingendo indietro il sedere","Scendi tenendo il busto eretto e le ginocchia sopra i piedi","Scendi finché le cosce sono parallele al suolo o oltre","Spingi sui talloni per tornare su"],
+    muscles: ["Quadricipiti","Glutei","Hamstring","Polpacci","Core"],
+    errors: ["Ginocchia che crollano verso l'interno","Talloni che si sollevano","Arrotondare la schiena bassa","Profondità insufficiente"],
+    diff: 2, recovery: "90 secondi",
+    tips: "Immagina di sedere su una sedia invisibile. Mantieni il petto alto e lo sguardo in avanti."
+  },
+  "Affondi": {
+    desc: "Gli affondi allenano ogni gamba in modo indipendente, migliorando forza, equilibrio e coordinazione delle gambe.",
+    steps: ["In piedi con piedi a larghezza fianchi","Fai un passo lungo in avanti con una gamba","Abbassa il ginocchio posteriore quasi a toccare il suolo","Mantieni il busto eretto, ginocchio anteriore sopra il piede","Torna alla posizione iniziale spingendo sul tallone anteriore"],
+    muscles: ["Quadricipiti","Glutei","Hamstring","Polpacci"],
+    errors: ["Ginocchio anteriore che supera le dita del piede","Busto che si inclina in avanti","Ginocchio posteriore che tocca il suolo con forza"],
+    diff: 2, recovery: "75 secondi",
+    tips: "Mantieni il core contratto per tutto il movimento. Inizia con affondi sul posto prima di quelli camminati."
+  },
+  "Stacco rumeno": {
+    desc: "Lo stacco rumeno (RDL) è eccellente per hamstring e glutei. A differenza dello stacco classico mantiene le gambe semi-tese.",
+    steps: ["In piedi con manubri davanti alle cosce, palme verso di te","Gambe leggermente piegate, piedi a larghezza fianchi","Inclina il busto in avanti mantenendo la schiena neutra","Scendi finché senti il forte allungamento degli hamstring","Spingi i fianchi in avanti per tornare su"],
+    muscles: ["Hamstring","Glutei","Spina dorsale (erettori)","Core"],
+    errors: ["Arrotondare la schiena bassa","Piegare troppo le ginocchia (diventa uno squat)","Abbassare i pesi troppo oltre la tibia"],
+    diff: 3, recovery: "90 secondi",
+    tips: "Pensa di 'spingere il sedere verso la parete dietro di te' per mantenere la tensione corretta."
+  },
+  "Calf raise": {
+    desc: "Il calf raise sviluppa gastrocnemio e soleo, i muscoli del polpaccio, spesso trascurati ma fondamentali.",
+    steps: ["In piedi con punte dei piedi su un gradino o al suolo","Abbassa i talloni sotto il livello delle punte (se su gradino)","Spingi sulle punte dei piedi il più in alto possibile","Contrai i polpacci al punto più alto","Abbassa lentamente per lo stretching completo"],
+    muscles: ["Gastrocnemio","Soleo","Flessori plantari"],
+    errors: ["Range di movimento parziale","Abbassare troppo velocemente","Non usare step per range completo"],
+    diff: 1, recovery: "45 secondi",
+    tips: "I polpacci necessitano alto volume. Includi sia rip veloci che lente per stimolare entrambe le fibre."
+  },
+  "Russian Twist": {
+    desc: "Il Russian Twist lavora gli obliqui e la rotazione del tronco, fondamentale per la stabilità laterale del core.",
+    steps: ["Seduto a terra con ginocchia piegate e piedi sollevati","Inclina leggermente il busto indietro a circa 45°","Porta le mani (o manubrio) da un lato all'altro","Ruota il busto, non solo le braccia","Mantieni gli addominali contratti per tutto il movimento"],
+    muscles: ["Obliqui interni ed esterni","Retto dell'addome","Flessori dell'anca"],
+    errors: ["Ruotare solo le braccia senza il busto","Perdere la tensione addominale","Posizione del busto troppo verticale"],
+    diff: 2, recovery: "45 secondi",
+    tips: "Per aumentare la difficoltà usa un manubrio o pallone medicinale. Piedi sollevati aumentano l'intensità."
+  }
+};
+
+const MOTIVATIONAL_QUOTES = [
+  "Non aspettare la motivazione perfetta. Inizia e la motivazione arriverà.",
+  "Ogni rep ti avvicina alla versione migliore di te stesso.",
+  "Il dolore che senti oggi è la forza che sentirai domani.",
+  "La costanza batte il talento quando il talento non è costante.",
+  "Non fermarti finché non sei orgoglioso.",
+  "Il tuo corpo può farlo. È la tua mente che devi convincere.",
+  "Ogni allenamento conta. Anche quello brutto.",
+  "La disciplina è scegliere tra ciò che vuoi ora e ciò che vuoi di più.",
+  "Non cercare scuse. Cerca soluzioni.",
+  "Forgia te stesso come un'arma ogni giorno.",
+  "Il successo è la somma di piccoli sforzi ripetuti ogni giorno.",
+  "Allenarsi è difficile. Non allenarsi è più difficile.",
+  "Sii la versione migliore di te, non la copia di qualcun altro.",
+  "I campioni non smettono quando sono stanchi, smettono quando hanno finito.",
+  "Lavora in silenzio. Lascia che i risultati parlino per te."
 ];
 
+const DAYS_IT = ["Domenica","Lunedì","Martedì","Mercoledì","Giovedì","Venerdì","Sabato"];
+const MONTHS_IT = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
+const SHORT_DAYS = ["Dom","Lun","Mar","Mer","Gio","Ven","Sab"];
 
-// ── Stato applicazione ────────────────────────────────────
+// ===== STATE =====
+let state = {
+  workoutLog: {}, // { "YYYY-MM-DD": "done"|"skip" }
+  diary: {},       // { "YYYY-MM-DD": "text" }
+  goals: { weeklyWorkouts: 3, weeklyRuns: 3 },
+  customGoals: [],
+  notifs: { notif1: true, notif2: true, notif3: false, notifSound: true },
+  badges: {},
+  bestStreak: 0
+};
 
-let workoutHistory = loadKey('ego_workoutHistory', []); // [{date, day, dayName}]
-let incomeEntries  = loadKey('ego_incomeEntries',  []); // [{id, desc, amount, date, category}]
-
-let activeDay = 0; // indice 0–6
-
-
-// ── Navigazione tra pagine ────────────────────────────────
-
-function showPage(id) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  const target = document.getElementById(id);
-  if (target) target.classList.add('active');
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+function loadState() {
+  try {
+    const s = localStorage.getItem('egosTrain_state');
+    if (s) state = { ...state, ...JSON.parse(s) };
+  } catch(e) {}
+}
+function saveState() {
+  localStorage.setItem('egosTrain_state', JSON.stringify(state));
 }
 
-// Card home → pagine
-document.getElementById('cardWorkout').addEventListener('click', () => showPage('pageWorkout'));
-document.getElementById('cardWorkout').addEventListener('keydown', e => {
-  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showPage('pageWorkout'); }
-});
-
-document.getElementById('cardIncome').addEventListener('click', () => showPage('pageIncome'));
-document.getElementById('cardIncome').addEventListener('keydown', e => {
-  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showPage('pageIncome'); }
-});
-
-// Tasto Indietro
-document.querySelectorAll('.back-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const target = btn.dataset.target || 'pageHome';
-    showPage(target);
-    updateHomeStats();
-  });
-});
-
-
-// ── Header date ───────────────────────────────────────────
-
-function updateHeaderDate() {
-  const el = document.getElementById('headerDate');
-  const now = new Date();
-  el.textContent = now.toLocaleDateString('it-IT', {
-    weekday: 'short', day: 'numeric', month: 'short'
-  });
+// ===== UTILS =====
+function dateKey(d) {
+  return d.toISOString().split('T')[0];
 }
+function today() { return new Date(); }
+function todayKey() { return dateKey(today()); }
+function getWorkoutForDow(dow) { return WORKOUT_PLAN[dow]; }
+function getDayStatus(key) { return state.workoutLog[key] || null; }
 
-
-// ── Homepage — stats strip ────────────────────────────────
-
-function updateHomeStats() {
-  document.getElementById('statWorkouts').textContent = workoutHistory.length;
-
-  // Streak: giorni consecutivi con almeno un allenamento completato (non riposo)
-  const uniqueDates = [...new Set(workoutHistory.map(h => h.date))].sort().reverse();
-  let streak = 0;
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  for (let i = 0; i < uniqueDates.length; i++) {
-    const d = new Date(uniqueDates[i]); d.setHours(0, 0, 0, 0);
-    const diff = Math.round((today - d) / 86400000);
-    if (diff === i || (i === 0 && diff <= 1)) streak++;
+function calcStreak() {
+  let streak = 0; let d = new Date();
+  for (let i = 0; i < 365; i++) {
+    const k = dateKey(d);
+    const dow = d.getDay();
+    const plan = WORKOUT_PLAN[dow];
+    if (plan.type === 'rest') { d.setDate(d.getDate()-1); continue; }
+    const s = state.workoutLog[k];
+    if (s === 'done') { streak++; d.setDate(d.getDate()-1); }
+    else if (s === 'skip') { break; }
+    else if (k === todayKey()) { d.setDate(d.getDate()-1); }
     else break;
   }
-  document.getElementById('statStreak').textContent = streak;
-
-  // Entrate mese corrente
-  const now = new Date();
-  const monthTotal = incomeEntries
-    .filter(e => {
-      const d = new Date(e.date);
-      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-    })
-    .reduce((sum, e) => sum + Number(e.amount), 0);
-
-  document.getElementById('statIncome').textContent = formatCurrency(monthTotal);
+  return streak;
 }
 
+function totalWorkouts() {
+  return Object.values(state.workoutLog).filter(v => v === 'done').length;
+}
+function totalRuns() {
+  return Object.entries(state.workoutLog).filter(([k,v]) => {
+    if (v !== 'done') return false;
+    const d = new Date(k); const dow = d.getDay();
+    return WORKOUT_PLAN[dow] && WORKOUT_PLAN[dow].type === 'run';
+  }).length;
+}
 
-// ── Allenamenti ───────────────────────────────────────────
-
-function renderDayContent(dayIndex) {
-  activeDay = dayIndex;
-  const plan = WORKOUT_PLAN[dayIndex];
-  const container = document.getElementById('dayContent');
-
-  // Aggiorna tab attivo
-  document.querySelectorAll('.day-tab').forEach(t => {
-    t.classList.toggle('active', Number(t.dataset.day) === dayIndex);
-  });
-
-  if (plan.type === 'rest') {
-    container.innerHTML = `
-      <div class="rest-card">
-        <span class="rest-emoji">😴</span>
-        <h2 class="rest-title">Giorno di riposo</h2>
-        <p class="rest-desc">Il corpo cresce durante il recupero. Idratati, dormi bene e preparati per la prossima settimana.</p>
-      </div>`;
-    return;
+function weeklyStats() {
+  const now = today();
+  const dow = now.getDay();
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() - ((dow + 6) % 7)); // Monday start
+  let done = 0, total = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate() + i);
+    const k = dateKey(d); const plan = WORKOUT_PLAN[d.getDay()];
+    if (!plan || plan.type === 'rest') continue;
+    total++;
+    if (state.workoutLog[k] === 'done') done++;
   }
-
-  // Check se già completato oggi
-  const todayStr = todayISO();
-  const alreadyDone = workoutHistory.some(h => h.date === todayStr && h.day === dayIndex);
-  const btnClass = alreadyDone ? 'btn-complete done' : 'btn-complete';
-  const btnText  = alreadyDone ? '✓ Completato' : 'Segna completato';
-
-  // Tipo badge
-  const typeBadge = plan.type === 'run'
-    ? `<span style="color:var(--green);font-size:var(--text-sm)">🏃 Corsa${plan.duration ? ' · ' + plan.duration : ''}</span>`
-    : `<span style="color:var(--blue);font-size:var(--text-sm)">💪 Forza</span>`;
-
-  let exercisesHTML = '';
-  plan.exercises.forEach((ex, i) => {
-    exercisesHTML += `
-      <div class="exercise-row" data-ex="${i}" tabindex="0" role="button" aria-label="Apri guida ${ex.name}">
-        <span class="ex-icon">${ex.icon}</span>
-        <div class="ex-info">
-          <div class="ex-name">${ex.name}</div>
-          <div class="ex-sets">${ex.sets}</div>
-          <div class="ex-muscles">
-            ${ex.muscles.map(m => `<span class="muscle-tag">${m}</span>`).join('')}
-          </div>
-        </div>
-        <span class="ex-chevron">›</span>
-      </div>`;
-  });
-
-  container.innerHTML = `
-    <div class="day-header">
-      <div>
-        <h2 class="day-title">${DAYS[dayIndex]}</h2>
-        <p class="day-subtitle">${plan.focus}</p>
-        <p style="margin-top:6px">${typeBadge}</p>
-      </div>
-      <button class="${btnClass}" id="btnComplete" aria-label="Segna allenamento come completato">
-        ${btnText}
-      </button>
-    </div>
-    <div class="exercise-list">${exercisesHTML}</div>`;
-
-  // Evento: segna completato
-  document.getElementById('btnComplete').addEventListener('click', () => {
-    markWorkoutComplete(dayIndex);
-  });
-
-  // Evento: apri modal esercizio
-  container.querySelectorAll('.exercise-row').forEach(row => {
-    row.addEventListener('click', () => openExerciseModal(dayIndex, Number(row.dataset.ex)));
-    row.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        openExerciseModal(dayIndex, Number(row.dataset.ex));
-      }
-    });
-  });
+  return { done, total, pct: total ? Math.round(done/total*100) : 0 };
 }
 
-function markWorkoutComplete(dayIndex) {
-  const todayStr = todayISO();
-  const alreadyDone = workoutHistory.some(h => h.date === todayStr && h.day === dayIndex);
-
-  if (alreadyDone) {
-    // Deseleziona
-    workoutHistory = workoutHistory.filter(h => !(h.date === todayStr && h.day === dayIndex));
-  } else {
-    workoutHistory.push({
-      date: todayStr,
-      day: dayIndex,
-      dayName: DAYS[dayIndex]
-    });
+function monthlyStats(year, month) {
+  let done = 0, total = 0;
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dt = new Date(year, month, d);
+    if (dt > today()) break;
+    const plan = WORKOUT_PLAN[dt.getDay()];
+    if (!plan || plan.type === 'rest') continue;
+    total++;
+    if (state.workoutLog[dateKey(dt)] === 'done') done++;
   }
-
-  saveKey('ego_workoutHistory', workoutHistory);
-  renderDayContent(dayIndex);
-  renderWorkoutHistory();
-  updateHomeStats();
+  return { done, total, pct: total ? Math.round(done/total*100) : 0 };
 }
 
-function renderWorkoutHistory() {
-  const container = document.getElementById('workoutHistory');
-  if (!workoutHistory.length) {
-    container.innerHTML = `<div class="history-empty">Nessun allenamento completato ancora.<br>Inizia oggi! 💪</div>`;
-    return;
-  }
-
-  // Ordine inverso cronologico
-  const sorted = [...workoutHistory].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 20);
-
-  container.innerHTML = sorted.map(h => `
-    <div class="history-item">
-      <span class="history-dot"></span>
-      <span class="history-name">${h.dayName}</span>
-      <span class="history-date">${formatDate(h.date)}</span>
-    </div>`).join('');
-}
-
-// Tab days
-document.querySelectorAll('.day-tab').forEach(tab => {
-  tab.addEventListener('click', () => renderDayContent(Number(tab.dataset.day)));
-  tab.addEventListener('keydown', e => {
-    if (e.key === 'ArrowRight') {
-      const next = (Number(tab.dataset.day) + 1) % 7;
-      document.querySelector(`.day-tab[data-day="${next}"]`)?.focus();
-      renderDayContent(next);
-    }
-    if (e.key === 'ArrowLeft') {
-      const prev = (Number(tab.dataset.day) + 6) % 7;
-      document.querySelector(`.day-tab[data-day="${prev}"]`)?.focus();
-      renderDayContent(prev);
-    }
+// ===== NAVIGATION =====
+let currentSection = 'dashboard';
+document.querySelectorAll('.nav-item, .mobile-nav-item').forEach(el => {
+  el.addEventListener('click', () => {
+    const s = el.dataset.section;
+    if (s) navigateTo(s);
   });
 });
+function navigateTo(section) {
+  currentSection = section;
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById('section-' + section).classList.add('active');
+  document.querySelectorAll('.nav-item, .mobile-nav-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.section === section);
+  });
+  if (section === 'calendar') renderCalendar();
+  if (section === 'stats') renderStats();
+  if (section === 'badges') renderBadges();
+  if (section === 'diary') { diaryToday(); renderRecentDiary(); }
+  if (section === 'goals') renderGoals();
+  if (section === 'dashboard') renderDashboard();
+  if (section === 'workout') renderWorkout();
+}
 
+// ===== THEME =====
+function toggleTheme() {
+  const isDark = document.body.dataset.theme === 'dark';
+  document.body.dataset.theme = isDark ? 'light' : 'dark';
+  document.getElementById('themeIcon').textContent = isDark ? '🌙' : '☀️';
+  document.getElementById('themeLabel').textContent = isDark ? 'Tema Scuro' : 'Tema Chiaro';
+  localStorage.setItem('egosTrain_theme', document.body.dataset.theme);
+}
+function loadTheme() {
+  const t = localStorage.getItem('egosTrain_theme');
+  if (t) {
+    document.body.dataset.theme = t;
+    document.getElementById('themeIcon').textContent = t === 'dark' ? '☀️' : '🌙';
+    document.getElementById('themeLabel').textContent = t === 'dark' ? 'Tema Chiaro' : 'Tema Scuro';
+  }
+}
 
-// ── Modal esercizio ───────────────────────────────────────
+// ===== DASHBOARD =====
+function renderDashboard() {
+  const now = today();
+  const dow = now.getDay();
+  const plan = WORKOUT_PLAN[dow];
+  const tk = todayKey();
 
-const modal        = document.getElementById('exerciseModal');
-const modalClose   = document.getElementById('modalClose');
-const modalContent = document.getElementById('modalContent');
+  // Header
+  const h = now.getHours();
+  const greeting = h < 12 ? 'Buongiorno 👋' : h < 18 ? 'Buon pomeriggio 👋' : 'Buonasera 👋';
+  document.getElementById('dashTitle').textContent = greeting;
+  document.getElementById('dashDate').textContent = `${DAYS_IT[dow]}, ${now.getDate()} ${MONTHS_IT[now.getMonth()]} ${now.getFullYear()}`;
 
-function openExerciseModal(dayIndex, exIndex) {
-  const ex = WORKOUT_PLAN[dayIndex].exercises[exIndex];
-  if (!ex) return;
+  // Today card
+  document.getElementById('todayDateStr').textContent = `${now.getDate()} ${MONTHS_IT[now.getMonth()]} ${now.getFullYear()}`;
+  document.getElementById('todayDayName').textContent = `${plan.emoji} ${plan.name}`;
+  document.getElementById('todayQuote').textContent = `"${MOTIVATIONAL_QUOTES[Math.floor(Math.random()*MOTIVATIONAL_QUOTES.length)]}"`;
+  document.getElementById('todayWorkoutName').textContent = plan.type === 'rest' ? 'Giornata di riposo' : plan.name;
+  document.getElementById('todayWorkoutDetail').textContent = plan.detail || (plan.exercises.length ? `${plan.exercises.length} esercizi` : '');
 
-  const diffColor = { 'Base': 'var(--green)', 'Intermedio': 'var(--amber)', 'Avanzato': 'var(--red)' };
-  const color = diffColor[ex.difficulty] || 'var(--text-2)';
+  // Actions
+  const status = getDayStatus(tk);
+  const actEl = document.getElementById('todayActions');
+  if (plan.type === 'rest') {
+    actEl.innerHTML = `<span class="status-badge status-pending">😴 Riposa e recupera</span>`;
+  } else if (status === 'done') {
+    actEl.innerHTML = `<span class="status-badge status-done">✅ Completato!</span>
+      <button class="today-btn today-btn-skip" onclick="setTodayStatus('skip')">↩ Annulla</button>`;
+  } else if (status === 'skip') {
+    actEl.innerHTML = `<span class="status-badge status-skip">❌ Saltato</span>
+      <button class="today-btn today-btn-done" onclick="setTodayStatus('done')">↩ Annulla</button>`;
+  } else {
+    actEl.innerHTML = `
+      <button class="today-btn today-btn-done" onclick="setTodayStatus('done')">✅ Completato</button>
+      <button class="today-btn today-btn-skip" onclick="setTodayStatus('skip')">❌ Salta</button>`;
+  }
 
-  const stepsHTML = ex.steps.map((s, i) => `
-    <div class="modal-step">
-      <div class="modal-step-num">${i + 1}</div>
-      <div class="modal-step-text">${s}</div>
-    </div>`).join('');
+  // Stats
+  const streak = calcStreak();
+  const ws = weeklyStats();
+  const ms = monthlyStats(now.getFullYear(), now.getMonth());
+  document.getElementById('statWorkouts').textContent = totalWorkouts();
+  document.getElementById('statRuns').textContent = totalRuns();
+  document.getElementById('statStreak').textContent = streak;
+  document.getElementById('statMonthPct').textContent = ms.pct + '%';
+  document.getElementById('streakBadge').textContent = `🔥 ${streak} giorni`;
 
-  const muscleTagsHTML = ex.muscles.map(m => `<span class="modal-tag">${m}</span>`).join('');
+  // Weekly strip
+  renderWeeklyStrip();
+  document.getElementById('weeklyPct').textContent = ws.pct + '%';
+  document.getElementById('weeklyBar').style.width = ws.pct + '%';
 
-  modalContent.innerHTML = `
-    <div class="modal-exercise-icon">${ex.icon}</div>
-    <h2 class="modal-exercise-name">${ex.name}</h2>
+  // History
+  renderRecentHistory();
 
-    <div class="modal-section">
-      <div class="modal-section-title">Volume</div>
-      <p class="modal-desc" style="font-size:1.05rem;font-weight:600;color:var(--text-1)">${ex.sets}</p>
-    </div>
+  // Check badges
+  checkBadges();
+  updateBadgeSidebarCount();
+}
 
-    <div class="modal-section">
-      <div class="modal-section-title">Descrizione</div>
-      <p class="modal-desc">${ex.desc}</p>
-    </div>
+function renderWeeklyStrip() {
+  const now = today();
+  const startOfWeek = new Date(now);
+  const dow = now.getDay();
+  startOfWeek.setDate(now.getDate() - ((dow + 6) % 7));
+  let html = '';
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate() + i);
+    const k = dateKey(d); const plan = WORKOUT_PLAN[d.getDay()];
+    const isToday = k === todayKey();
+    const status = state.workoutLog[k];
+    let cls = 'pending', dotContent = SHORT_DAYS[d.getDay()][0];
+    if (plan && plan.type === 'rest') cls = 'rest';
+    if (status === 'done') cls = 'done';
+    if (status === 'skip') cls = 'skip';
+    html += `<div class="day-pill ${cls} ${isToday?'today-pill':''}">
+      <div class="day-dot">${status==='done'?'✓':status==='skip'?'✗':plan?.type==='rest'?'😴':plan?.emoji||''}</div>
+      <div class="day-name">${SHORT_DAYS[d.getDay()]}</div>
+    </div>`;
+  }
+  document.getElementById('weeklyStrip').innerHTML = html;
+}
 
-    <div class="modal-section">
-      <div class="modal-section-title">Esecuzione passo per passo</div>
-      <div class="modal-steps">${stepsHTML}</div>
-    </div>
+function renderRecentHistory() {
+  const entries = Object.entries(state.workoutLog)
+    .sort(([a],[b]) => b.localeCompare(a)).slice(0,8);
+  if (!entries.length) {
+    document.getElementById('recentHistory').innerHTML = `<div class="text-xs" style="padding:10px 0">Nessun allenamento registrato ancora. Inizia oggi! 💪</div>`;
+    return;
+  }
+  let html = '';
+  entries.forEach(([k,v]) => {
+    const d = new Date(k); const plan = WORKOUT_PLAN[d.getDay()];
+    const color = v === 'done' ? '#10b981' : '#ef4444';
+    const icon = v === 'done' ? '✅' : '❌';
+    html += `<div class="history-item">
+      <div class="history-dot" style="background:${color}"></div>
+      <div style="flex:1">
+        <div class="text-sm font-bold">${plan?.emoji||''} ${plan?.name||'Allenamento'}</div>
+        <div class="text-xs">${DAYS_IT[d.getDay()]}, ${d.getDate()} ${MONTHS_IT[d.getMonth()]}</div>
+      </div>
+      <span class="status-badge ${v==='done'?'status-done':'status-skip'}">${icon} ${v==='done'?'Completato':'Saltato'}</span>
+    </div>`;
+  });
+  document.getElementById('recentHistory').innerHTML = html;
+}
 
-    <div class="modal-section">
-      <div class="modal-section-title">Muscoli coinvolti</div>
-      <div class="modal-tags">${muscleTagsHTML}</div>
-    </div>
+function setTodayStatus(status) {
+  state.workoutLog[todayKey()] = status;
+  saveState();
+  renderDashboard();
+  checkBadges();
+  toast(status === 'done' ? '🎉 Ottimo lavoro! Allenamento completato!' : '📝 Allenamento registrato come saltato', status === 'done' ? 'success' : 'info');
+}
 
-    <div class="modal-section">
-      <div class="modal-section-title">Difficoltà</div>
-      <p class="modal-desc" style="color:${color};font-weight:600">${ex.difficulty}</p>
-    </div>
+// ===== CALENDAR =====
+let calYear = today().getFullYear();
+let calMonth = today().getMonth();
+function calNav(dir) { calMonth += dir; if (calMonth > 11) { calMonth=0; calYear++; } if (calMonth < 0) { calMonth=11; calYear--; } renderCalendar(); }
+function renderCalendar() {
+  document.getElementById('calTitle').textContent = `${MONTHS_IT[calMonth]} ${calYear}`;
+  const firstDay = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const startOffset = (firstDay + 6) % 7; // Monday start
+  let html = SHORT_DAYS.slice(1).concat(SHORT_DAYS[0]).map(d => `<div class="cal-header-cell">${d}</div>`).join('');
+  for (let i = 0; i < startOffset; i++) {
+    const prevDay = new Date(calYear, calMonth, -(startOffset-1-i));
+    html += `<div class="cal-cell other-month"><span>${prevDay.getDate()}</span></div>`;
+  }
+  const now = today();
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dt = new Date(calYear, calMonth, d);
+    const k = dateKey(dt);
+    const plan = WORKOUT_PLAN[dt.getDay()];
+    const status = state.workoutLog[k];
+    const isToday = k === dateKey(now);
+    let cls = '', dot = '';
+    if (status === 'done') { cls = 'done'; dot = `<div class="cal-dot check"></div>`; }
+    else if (status === 'skip') { cls = 'skip'; dot = `<div class="cal-dot cross"></div>`; }
+    else if (plan?.type === 'strength') dot = `<div class="cal-dot blue"></div>`;
+    else if (plan?.type === 'run') dot = `<div class="cal-dot green"></div>`;
+    else if (plan?.type === 'rest') { cls = 'rest-day'; dot = `<div class="cal-dot orange"></div>`; }
+    if (isToday) cls += ' today';
+    html += `<div class="cal-cell ${cls}" onclick="openDayModal('${k}')"><span>${d}</span>${dot}</div>`;
+  }
+  const totalCells = startOffset + daysInMonth;
+  const remainingCells = totalCells % 7 ? 7 - (totalCells % 7) : 0;
+  for (let i = 1; i <= remainingCells; i++) html += `<div class="cal-cell other-month"><span>${i}</span></div>`;
+  document.getElementById('calGrid').innerHTML = html;
+}
 
-    <div class="modal-section">
-      <div class="modal-tip">
-        <span class="modal-tip-icon">💡</span>
-        <p class="modal-tip-text">${ex.tip}</p>
+function openDayModal(dateStr) {
+  const d = new Date(dateStr);
+  const dow = d.getDay();
+  const plan = WORKOUT_PLAN[dow];
+  const status = state.workoutLog[dateStr];
+  document.getElementById('dayModalTitle').textContent = `${plan.emoji} ${DAYS_IT[dow]} ${d.getDate()} ${MONTHS_IT[d.getMonth()]}`;
+  document.getElementById('dayModalSub').textContent = plan.name;
+  let body = '';
+  // Status
+  if (status === 'done') body += `<div class="status-badge status-done" style="margin-bottom:14px">✅ Completato</div><br>`;
+  else if (status === 'skip') body += `<div class="status-badge status-skip" style="margin-bottom:14px">❌ Saltato</div><br>`;
+  else body += `<div class="status-badge status-pending" style="margin-bottom:14px">⏳ Non registrato</div><br>`;
+  // Exercises
+  if (plan.type === 'strength' && plan.exercises.length) {
+    body += `<div class="guide-section-title">Esercizi</div>`;
+    plan.exercises.forEach(ex => {
+      body += `<div class="exercise-item"><div class="exercise-info"><div class="exercise-name">${ex.name}</div><div class="exercise-sets">${ex.sets}</div></div></div>`;
+    });
+  } else if (plan.type === 'run') {
+    body += `<div style="font-size:14px;color:var(--text-secondary)">🏃 Corsa: ${plan.detail||'30 minuti'}</div>`;
+  } else {
+    body += `<div style="font-size:14px;color:var(--text-secondary)">😴 Giornata di riposo e recupero</div>`;
+  }
+  // Diary note
+  const note = state.diary[dateStr];
+  if (note) {
+    body += `<div class="guide-section-title" style="margin-top:14px">Note Diario</div><div style="font-size:13px;color:var(--text-secondary);line-height:1.6">${note.replace(/\n/g,'<br>')}</div>`;
+  }
+  // Actions
+  if (plan.type !== 'rest' && dateStr <= dateKey(today())) {
+    body += `<div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-success btn-sm" onclick="setDayStatus('${dateStr}','done')">✅ Completato</button>
+      <button class="btn btn-danger btn-sm" onclick="setDayStatus('${dateStr}','skip')">❌ Saltato</button>
+    </div>`;
+  }
+  document.getElementById('dayModalBody').innerHTML = body;
+  openModal('dayModal');
+}
+function setDayStatus(dateStr, status) {
+  state.workoutLog[dateStr] = status;
+  saveState(); renderCalendar(); renderDashboard(); checkBadges();
+  closeModal('dayModal');
+  toast(status==='done'?'✅ Registrato come completato':'❌ Registrato come saltato', status==='done'?'success':'info');
+}
+
+// ===== WORKOUT =====
+let activeWorkoutDay = today().getDay();
+function renderWorkout() {
+  const tabs = document.getElementById('workoutDayTabs');
+  tabs.innerHTML = Object.entries(WORKOUT_PLAN).map(([dow,plan]) => `
+    <button class="preset-btn ${parseInt(dow)===activeWorkoutDay?'active':''}" onclick="setWorkoutDay(${dow})">${plan.emoji} ${DAYS_IT[dow].substring(0,3)}</button>
+  `).join('');
+  renderWorkoutDay();
+}
+function setWorkoutDay(dow) {
+  activeWorkoutDay = parseInt(dow);
+  renderWorkout();
+}
+function renderWorkoutDay() {
+  const plan = WORKOUT_PLAN[activeWorkoutDay];
+  const dow = activeWorkoutDay;
+  let html = '';
+  if (plan.type === 'rest') {
+    html = `<div class="card" style="text-align:center;padding:40px">
+      <div style="font-size:56px;margin-bottom:12px">😴</div>
+      <div style="font-size:20px;font-weight:700;margin-bottom:8px">Giorno di Riposo</div>
+      <div style="color:var(--text-muted);font-size:14px">Il recupero è parte fondamentale dell'allenamento. Rilassati e idratati!</div>
+    </div>`;
+  } else if (plan.type === 'run') {
+    html = `<div class="card">
+      <div class="flex items-center gap-3" style="margin-bottom:16px">
+        <div style="font-size:40px">🏃</div>
+        <div>
+          <div style="font-size:20px;font-weight:700">Corsa</div>
+          <div style="color:var(--text-muted);font-size:14px">${plan.detail}</div>
+        </div>
+      </div>
+      <div class="guide-section">
+        <div class="guide-section-title">Consigli per la corsa</div>
+        <div class="guide-step"><div class="guide-step-num">1</div><div class="guide-step-text">Inizia con 5 minuti di camminata veloce per il riscaldamento</div></div>
+        <div class="guide-step"><div class="guide-step-num">2</div><div class="guide-step-text">Mantieni un ritmo conversazionale: dovresti riuscire a parlare</div></div>
+        <div class="guide-step"><div class="guide-step-num">3</div><div class="guide-step-text">Respira dal naso e dalla bocca, con un ritmo regolare</div></div>
+        <div class="guide-step"><div class="guide-step-num">4</div><div class="guide-step-text">Termina con 5 minuti di defaticamento e stretching</div></div>
       </div>
     </div>`;
-
-  modal.classList.add('open');
-  document.body.style.overflow = 'hidden';
-  modalClose.focus();
+  } else {
+    html = `<div class="card">
+      <div class="flex items-center gap-3" style="margin-bottom:18px">
+        <div style="font-size:40px">${plan.emoji}</div>
+        <div>
+          <div style="font-size:20px;font-weight:700">${plan.name}</div>
+          <div style="color:var(--text-muted);font-size:14px">${plan.exercises.length} esercizi</div>
+        </div>
+      </div>`;
+    plan.exercises.forEach(ex => {
+      const guide = EXERCISE_GUIDE[ex.name];
+      const diffColors = ['','#10b981','#f59e0b','#ef4444'];
+      const diffNames = ['','Principiante','Intermedio','Avanzato'];
+      html += `<div class="exercise-item">
+        <div class="exercise-info">
+          <div class="exercise-name">${ex.name}</div>
+          <div class="exercise-sets" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:3px">
+            <span>${ex.sets}</span>
+            ${ex.muscles ? `<span style="color:var(--text-muted)">${ex.muscles.slice(0,2).join(', ')}</span>` : ''}
+            ${guide ? `<span style="color:${diffColors[ex.diff||1]}">⬤ ${diffNames[ex.diff||1]}</span>` : ''}
+          </div>
+        </div>
+        <div class="exercise-actions">
+          <button class="btn btn-glass btn-sm" onclick="openExerciseGuide('${ex.name}')">📖 Guida</button>
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+  document.getElementById('workoutDayContent').innerHTML = html;
 }
 
-function closeModal() {
-  modal.classList.remove('open');
+// ===== EXERCISE GUIDE =====
+function openExerciseGuide(name) {
+  const g = EXERCISE_GUIDE[name];
+  if (!g) return;
+  document.getElementById('modalExerciseName').textContent = name;
+  document.getElementById('modalMuscles').innerHTML = g.muscles.map(m => `<span class="muscle-tag">${m}</span>`).join('');
+  const diffColors = ['','#10b981','#f59e0b','#ef4444'];
+  const diffNames = ['','Principiante','Intermedio','Avanzato'];
+  let body = `
+    <div class="exercise-illustration">
+      <div style="text-align:center">
+        <div style="font-size:52px;filter:drop-shadow(0 2px 8px rgba(37,99,235,0.25))">${getExerciseEmoji(name)}</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:8px">${name}</div>
+      </div>
+    </div>
+    <div class="guide-section">
+      <div class="guide-section-title">Descrizione</div>
+      <div class="text-sm">${g.desc}</div>
+    </div>
+    <div class="guide-section">
+      <div class="guide-section-title">Esecuzione passo passo</div>
+      ${g.steps.map((s,i) => `<div class="guide-step"><div class="guide-step-num">${i+1}</div><div class="guide-step-text">${s}</div></div>`).join('')}
+    </div>
+    <div class="guide-section">
+      <div class="guide-section-title">Muscoli coinvolti</div>
+      <div>${g.muscles.map(m => `<span class="muscle-tag">${m}</span>`).join('')}</div>
+    </div>
+    <div class="guide-section">
+      <div class="guide-section-title">Errori comuni</div>
+      ${g.errors.map(e => `<div class="error-item"><span class="error-icon">⚠️</span><span class="error-text">${e}</span></div>`).join('')}
+    </div>
+    <div class="guide-section">
+      <div class="guide-section-title">Dettagli</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        <div><span class="text-xs">Difficoltà</span><br><span style="color:${diffColors[g.diff||1]};font-weight:700">● ${diffNames[g.diff||1]}</span></div>
+        <div><span class="text-xs">Recupero</span><br><span class="text-sm font-bold">⏱ ${g.recovery}</span></div>
+      </div>
+    </div>
+    <div class="guide-section">
+      <div class="guide-section-title">💡 Consiglio pro</div>
+      <div style="background:linear-gradient(135deg,rgba(37,99,235,0.08),rgba(124,58,237,0.05));border:1px solid rgba(37,99,235,0.15);border-radius:10px;padding:12px;font-size:13px;color:var(--text-secondary);line-height:1.6">${g.tips}</div>
+    </div>`;
+  document.getElementById('modalBody').innerHTML = body;
+  openModal('exerciseModal');
+}
+
+function getExerciseEmoji(name) {
+  const map = {
+    'Piegamenti':'💪','Distensioni manubri':'🏋️','Croci':'🤸','Alzate laterali':'🙆',
+    'Dip':'⬇️','Plank':'🧘','Trazioni':'🏗️','Rematore':'🚣','Curl bicipiti':'💪',
+    'Curl martello':'🔨','Sollevamento gambe':'🦵','Crunch':'🔥','Squat':'🦵',
+    'Affondi':'🚶','Stacco rumeno':'⬆️','Calf raise':'👟','Russian Twist':'🌀'
+  };
+  return map[name] || '💪';
+}
+
+// ===== MODAL =====
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
   document.body.style.overflow = '';
 }
-
-modalClose.addEventListener('click', closeModal);
-modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
-
-
-// ── Entrate ───────────────────────────────────────────────
-
-// Set default date
-document.getElementById('incomeDate').value = todayISO();
-
-// Mese corrente label
-function updateIncomeMonthLabel() {
-  const now = new Date();
-  document.getElementById('incomeMonthLabel').textContent =
-    now.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
-}
-
-function calcMonthTotal() {
-  const now = new Date();
-  return incomeEntries
-    .filter(e => {
-      const d = new Date(e.date);
-      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-    })
-    .reduce((sum, e) => sum + Number(e.amount), 0);
-}
-
-function updateIncomeTotal() {
-  document.getElementById('incomeTotal').textContent = formatCurrency(calcMonthTotal());
-}
-
-function renderIncomeList() {
-  const container = document.getElementById('incomeList');
-  if (!incomeEntries.length) {
-    container.innerHTML = `<div class="income-empty">Nessuna entrata registrata.<br>Aggiungi il primo movimento qui sopra.</div>`;
-    return;
-  }
-
-  const sorted = [...incomeEntries].sort((a, b) => b.date.localeCompare(a.date));
-  const icons = { lavoro: '💼', freelance: '💻', investimenti: '📈', altro: '📦' };
-
-  container.innerHTML = sorted.map(e => `
-    <div class="income-item" data-id="${e.id}">
-      <span class="income-item-icon">${icons[e.category] || '📦'}</span>
-      <div class="income-item-info">
-        <div class="income-item-desc">${escapeHtml(e.desc)}</div>
-        <div class="income-item-meta">${formatDate(e.date)} · ${e.category}</div>
-      </div>
-      <span class="income-item-amount">+ ${formatCurrency(e.amount)}</span>
-      <button class="income-item-del" aria-label="Elimina entrata ${escapeHtml(e.desc)}" data-id="${e.id}">✕</button>
-    </div>`).join('');
-
-  // Delegazione eventi su pulsanti elimina
-  container.querySelectorAll('.income-item-del').forEach(btn => {
-    btn.addEventListener('click', () => deleteIncomeEntry(btn.dataset.id));
-  });
-}
-
-function renderCategoryChart() {
-  const container = document.getElementById('categoryChart');
-  if (!incomeEntries.length) {
-    container.innerHTML = `<p style="color:var(--text-3);font-size:var(--text-sm)">Nessun dato disponibile.</p>`;
-    return;
-  }
-
-  // Raggruppa per categoria
-  const totals = {};
-  incomeEntries.forEach(e => {
-    totals[e.category] = (totals[e.category] || 0) + Number(e.amount);
-  });
-
-  const icons = { lavoro: '💼', freelance: '💻', investimenti: '📈', altro: '📦' };
-  const max = Math.max(...Object.values(totals));
-  const sorted = Object.entries(totals).sort((a, b) => b[1] - a[1]);
-
-  container.innerHTML = sorted.map(([cat, total]) => `
-    <div class="cat-row">
-      <span class="cat-label">${icons[cat] || '📦'} ${cat}</span>
-      <div class="cat-bar-track">
-        <div class="cat-bar-fill" style="width:${Math.round(total / max * 100)}%"></div>
-      </div>
-      <span class="cat-amount">${formatCurrency(total)}</span>
-    </div>`).join('');
-}
-
-// Form submit
-document.getElementById('incomeForm').addEventListener('submit', e => {
-  e.preventDefault();
-
-  const desc   = document.getElementById('incomeDesc').value.trim();
-  const amount = parseFloat(document.getElementById('incomeAmount').value);
-  const date   = document.getElementById('incomeDate').value;
-  const cat    = document.getElementById('incomeCategory').value;
-
-  if (!desc || isNaN(amount) || amount <= 0 || !date) return;
-
-  incomeEntries.push({ id: uid(), desc, amount, date, category: cat });
-  saveKey('ego_incomeEntries', incomeEntries);
-
-  // Reset form
-  document.getElementById('incomeDesc').value = '';
-  document.getElementById('incomeAmount').value = '';
-  document.getElementById('incomeDate').value = todayISO();
-
-  updateIncomeTotal();
-  renderIncomeList();
-  renderCategoryChart();
-  updateHomeStats();
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) closeModal(el.id); });
 });
 
-function deleteIncomeEntry(id) {
-  incomeEntries = incomeEntries.filter(e => e.id !== id);
-  saveKey('ego_incomeEntries', incomeEntries);
-  updateIncomeTotal();
-  renderIncomeList();
-  renderCategoryChart();
-  updateHomeStats();
+// ===== TIMER =====
+let timerMode = 'stopwatch';
+let timerRunning = false, timerInterval = null;
+let timerSeconds = 0, timerTotal = 0;
+let laps = [];
+
+function setTimerMode(mode) {
+  timerMode = mode;
+  timerReset();
+  document.querySelectorAll('.timer-presets .preset-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.timer-presets .preset-btn').forEach(b => {
+    if ((mode==='stopwatch'&&b.textContent.includes('Cronometro'))||(mode==='countdown'&&b.textContent.includes('Conto'))||(mode==='rest'&&b.textContent.includes('Recupero'))) b.classList.add('active');
+  });
+  document.getElementById('countdownPresets').style.display = mode==='countdown'?'flex':'none';
+  document.getElementById('restPresets').style.display = mode==='rest'?'flex':'none';
+  document.getElementById('customTimerWrap').style.display = mode==='countdown'?'flex':'none';
+  document.getElementById('timerModeLabel').textContent = {stopwatch:'CRONOMETRO',countdown:'CONTO ALLA ROVESCIA',rest:'RECUPERO'}[mode];
+  document.getElementById('timerLapBtn').style.display = mode==='stopwatch'?'':'none';
 }
 
-document.getElementById('clearIncomeBtn').addEventListener('click', () => {
-  if (!incomeEntries.length) return;
-  if (confirm('Eliminare tutti i movimenti? L\'azione non è reversibile.')) {
-    incomeEntries = [];
-    saveKey('ego_incomeEntries', incomeEntries);
-    updateIncomeTotal();
-    renderIncomeList();
-    renderCategoryChart();
-    updateHomeStats();
+function setCountdown(sec) { timerTotal = sec; timerSeconds = sec; updateTimerDisplay(); updateCircle(); }
+function setCustomCountdown() {
+  const m = parseInt(document.getElementById('customMin').value)||0;
+  const s = parseInt(document.getElementById('customSec').value)||0;
+  setCountdown(m*60+s);
+}
+
+function timerToggle() {
+  if (timerRunning) {
+    clearInterval(timerInterval); timerRunning = false;
+    document.getElementById('timerStartBtn').textContent = '▶ Riprendi';
+  } else {
+    if (timerMode !== 'stopwatch' && timerSeconds <= 0) { if(timerTotal>0) timerSeconds=timerTotal; else return; }
+    timerRunning = true;
+    document.getElementById('timerStartBtn').textContent = '⏸ Pausa';
+    timerInterval = setInterval(() => {
+      if (timerMode === 'stopwatch') {
+        timerSeconds++;
+      } else {
+        timerSeconds--;
+        if (timerSeconds <= 0) {
+          timerSeconds = 0; clearInterval(timerInterval); timerRunning = false;
+          document.getElementById('timerStartBtn').textContent = '▶ Avvia';
+          if (state.notifs.notifSound) playBeep();
+          toast('⏰ Timer completato!', 'success');
+        }
+      }
+      updateTimerDisplay(); updateCircle();
+    }, 1000);
   }
-});
-
-
-// ── Utility ───────────────────────────────────────────────
-
-/** Previene XSS nell'inserimento dati utente */
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
+function timerReset() {
+  clearInterval(timerInterval); timerRunning = false; timerSeconds = timerTotal; laps = [];
+  document.getElementById('timerStartBtn').textContent = '▶ Avvia';
+  updateTimerDisplay(); updateCircle();
+  document.getElementById('lapsContainer').innerHTML = '';
+}
 
-// ── Init ──────────────────────────────────────────────────
+function timerLap() {
+  if (!timerRunning) return;
+  laps.unshift(formatTime(timerSeconds));
+  document.getElementById('lapsContainer').innerHTML = laps.map((l,i)=>`<div class="history-item"><span class="text-xs" style="color:var(--text-muted)">Giro ${laps.length-i}</span><span class="text-sm font-bold ml-auto">${l}</span></div>`).join('');
+}
 
+function updateTimerDisplay() {
+  document.getElementById('timerDisplay').textContent = formatTime(timerSeconds);
+}
+function formatTime(s) {
+  const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+  if (h > 0) return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+}
+function updateCircle() {
+  const circ = 603;
+  let pct = 1;
+  if (timerMode !== 'stopwatch' && timerTotal > 0) pct = timerSeconds / timerTotal;
+  const offset = circ * (1 - pct);
+  document.getElementById('timerCircle').style.strokeDashoffset = offset;
+}
+
+function playBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0,250,500].forEach(delay => {
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = 880; gain.gain.setValueAtTime(0.3, ctx.currentTime + delay/1000);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay/1000 + 0.3);
+      osc.start(ctx.currentTime + delay/1000); osc.stop(ctx.currentTime + delay/1000 + 0.3);
+    });
+  } catch(e) {}
+}
+
+// ===== STATS =====
+function renderStats() {
+  const now = today();
+  const yr = now.getFullYear();
+  const streak = calcStreak();
+  const ms = monthlyStats(yr, now.getMonth());
+  
+  // Annual stats
+  let yDone = 0, yTotal = 0, restDays = 0;
+  for (let m = 0; m <= now.getMonth(); m++) {
+    const s = monthlyStats(yr, m); yDone += s.done; yTotal += s.total;
+  }
+  // Rest days taken
+  Object.entries(state.workoutLog).forEach(([k,v]) => {
+    if (v === 'done') {
+      const d = new Date(k);
+      if (WORKOUT_PLAN[d.getDay()]?.type === 'rest') restDays++;
+    }
+  });
+  // Count actual rest sundays
+  let rCount = 0;
+  const log = state.workoutLog;
+  Object.keys(log).forEach(k => {
+    const d = new Date(k); if (d.getDay()===0) rCount++;
+  });
+
+  document.getElementById('s_workouts').textContent = totalWorkouts();
+  document.getElementById('s_runs').textContent = totalRuns();
+  document.getElementById('s_streak').textContent = Math.max(streak, state.bestStreak);
+  document.getElementById('s_rest').textContent = rCount;
+  document.getElementById('s_monthPct').textContent = ms.pct + '%';
+  document.getElementById('s_yearPct').textContent = yTotal ? Math.round(yDone/yTotal*100) + '%' : '0%';
+  document.getElementById('s_time').textContent = Math.round(totalWorkouts()*45/60) + 'h';
+  document.getElementById('s_streak_cur').textContent = streak;
+
+  // Charts
+  renderBarChart('monthlyChart', 'strength');
+  renderBarChart('runsChart', 'run');
+}
+
+function renderBarChart(containerId, type) {
+  const now = today();
+  const yr = now.getFullYear();
+  const data = [];
+  for (let m = 0; m < 12; m++) {
+    if (m > now.getMonth()) { data.push({label: MONTHS_IT[m].substring(0,3), val:0}); continue; }
+    const daysInMonth = new Date(yr, m+1, 0).getDate();
+    let done = 0;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dt = new Date(yr, m, d);
+      const plan = WORKOUT_PLAN[dt.getDay()];
+      if (plan?.type !== type) continue;
+      if (state.workoutLog[dateKey(dt)] === 'done') done++;
+    }
+    data.push({label: MONTHS_IT[m].substring(0,3), val: done});
+  }
+  const maxVal = Math.max(...data.map(d=>d.val), 1);
+  const html = data.map(d => `<div class="chart-bar-wrap">
+    <div class="chart-bar ${type==='run'?'run':''}" style="height:${Math.round(d.val/maxVal*100)}%"></div>
+    <div class="chart-label">${d.label.substring(0,1)}</div>
+  </div>`).join('');
+  document.getElementById(containerId).innerHTML = html;
+}
+
+// ===== GOALS =====
+function renderGoals() {
+  const ws = weeklyStats();
+  const now = today();
+  const weekRuns = countWeeklyRuns();
+  const html = `
+    <div class="goal-row">
+      <div class="goal-info">
+        <div class="goal-name">💪 Allenamenti settimanali</div>
+        <div class="goal-progress-row">
+          <div class="goal-pct">${ws.done}/${state.goals.weeklyWorkouts}</div>
+          <div class="goal-track progress-track"><div class="progress-fill" style="width:${Math.min(100,Math.round(ws.done/state.goals.weeklyWorkouts*100))}%"></div></div>
+        </div>
+      </div>
+      <input type="number" class="goal-input" id="goalWeeklyWorkouts" value="${state.goals.weeklyWorkouts}" min="1" max="7">
+    </div>
+    <div class="goal-row">
+      <div class="goal-info">
+        <div class="goal-name">🏃 Corse settimanali</div>
+        <div class="goal-progress-row">
+          <div class="goal-pct">${weekRuns}/${state.goals.weeklyRuns}</div>
+          <div class="goal-track progress-track"><div class="progress-fill green" style="width:${Math.min(100,Math.round(weekRuns/state.goals.weeklyRuns*100))}%"></div></div>
+        </div>
+      </div>
+      <input type="number" class="goal-input" id="goalWeeklyRuns" value="${state.goals.weeklyRuns}" min="1" max="7">
+    </div>`;
+  document.getElementById('goalsContainer').innerHTML = html;
+
+  // Custom goals
+  renderCustomGoals();
+}
+
+function countWeeklyRuns() {
+  const now = today();
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() - ((now.getDay()+6)%7));
+  let runs = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate()+i);
+    const k = dateKey(d); const plan = WORKOUT_PLAN[d.getDay()];
+    if (plan?.type === 'run' && state.workoutLog[k] === 'done') runs++;
+  }
+  return runs;
+}
+
+function saveGoals() {
+  state.goals.weeklyWorkouts = parseInt(document.getElementById('goalWeeklyWorkouts').value) || 3;
+  state.goals.weeklyRuns = parseInt(document.getElementById('goalWeeklyRuns').value) || 3;
+  saveState(); toast('🎯 Obiettivi salvati!', 'success'); renderGoals();
+}
+
+function addCustomGoal() {
+  const text = document.getElementById('customGoalText').value.trim();
+  const date = document.getElementById('customGoalDate').value;
+  if (!text) { toast('❌ Inserisci una descrizione', 'error'); return; }
+  state.customGoals.push({ text, date, done: false, id: Date.now() });
+  saveState(); document.getElementById('customGoalText').value = ''; document.getElementById('customGoalDate').value = '';
+  renderCustomGoals(); toast('✅ Obiettivo aggiunto!', 'success');
+}
+
+function renderCustomGoals() {
+  if (!state.customGoals.length) { document.getElementById('customGoalsList').innerHTML = '<div class="text-xs">Nessun obiettivo personalizzato</div>'; return; }
+  const html = state.customGoals.map(g => `<div class="goal-row">
+    <div class="goal-info">
+      <div class="goal-name" style="${g.done?'text-decoration:line-through;opacity:0.6':''}">🎯 ${g.text}</div>
+      ${g.date ? `<div class="text-xs">Scadenza: ${new Date(g.date).toLocaleDateString('it-IT')}</div>` : ''}
+    </div>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-glass btn-sm" onclick="toggleCustomGoal(${g.id})">${g.done?'↩':'✅'}</button>
+      <button class="btn btn-danger btn-sm" onclick="removeCustomGoal(${g.id})">🗑</button>
+    </div>
+  </div>`).join('');
+  document.getElementById('customGoalsList').innerHTML = html;
+}
+
+function toggleCustomGoal(id) {
+  const g = state.customGoals.find(g => g.id === id);
+  if (g) { g.done = !g.done; saveState(); renderCustomGoals(); }
+}
+function removeCustomGoal(id) {
+  state.customGoals = state.customGoals.filter(g => g.id !== id);
+  saveState(); renderCustomGoals();
+}
+
+// ===== BADGES =====
+const BADGE_DEFS = [
+  { id: 'first_workout', emoji: '🌟', name: 'Primo Passo', desc: 'Primo allenamento completato', check: () => totalWorkouts() >= 1 },
+  { id: 'week1', emoji: '📅', name: 'Prima Settimana', desc: 'Settimana completata', check: () => weeklyStats().pct >= 100 },
+  { id: 'w10', emoji: '🔟', name: '10 Allenamenti', desc: 'Raggiunti 10 allenamenti', check: () => totalWorkouts() >= 10 },
+  { id: 'w25', emoji: '💎', name: '25 Allenamenti', desc: 'Raggiunti 25 allenamenti', check: () => totalWorkouts() >= 25 },
+  { id: 'w50', emoji: '🏅', name: '50 Allenamenti', desc: 'Raggiunti 50 allenamenti', check: () => totalWorkouts() >= 50 },
+  { id: 'w100', emoji: '🏆', name: '100 Allenamenti', desc: 'Leggendario: 100 allenamenti!', check: () => totalWorkouts() >= 100 },
+  { id: 'streak30', emoji: '🔥', name: '30 Giorni', desc: '30 giorni consecutivi', check: () => calcStreak() >= 30 },
+  { id: 'streak7', emoji: '⚡', name: '7 Giorni', desc: '7 giorni di fila', check: () => calcStreak() >= 7 },
+  { id: 'run10', emoji: '🏃', name: '10 Corse', desc: 'Raggiunte 10 corse', check: () => totalRuns() >= 10 },
+  { id: 'run25', emoji: '🥇', name: '25 Corse', desc: 'Raggiunte 25 corse', check: () => totalRuns() >= 25 },
+  { id: 'consistent', emoji: '📊', name: 'Costante', desc: 'Mese con >75% completamento', check: () => { const m=monthlyStats(today().getFullYear(),today().getMonth()); return m.pct >= 75; } },
+  { id: 'early_bird', emoji: '🌅', name: 'Mattiniero', desc: 'Benvenuto nella famiglia egosTrain', check: () => totalWorkouts() >= 1 },
+];
+
+function checkBadges() {
+  let newBadge = false;
+  BADGE_DEFS.forEach(b => {
+    if (!state.badges[b.id] && b.check()) {
+      state.badges[b.id] = new Date().toISOString();
+      newBadge = true;
+      setTimeout(() => toast(`🏆 Badge sbloccato: ${b.name}!`, 'success'), 500);
+    }
+  });
+  if (newBadge) saveState();
+  updateBadgeSidebarCount();
+}
+
+function updateBadgeSidebarCount() {
+  const count = Object.keys(state.badges).length;
+  document.getElementById('sidebarBadgeCount').textContent = count;
+  document.getElementById('badgeUnlockedCount').textContent = `${count} sbloccati`;
+}
+
+function renderBadges() {
+  const html = BADGE_DEFS.map(b => {
+    const unlocked = !!state.badges[b.id];
+    const dateStr = unlocked ? new Date(state.badges[b.id]).toLocaleDateString('it-IT') : '';
+    return `<div class="badge-card ${unlocked?'':'locked'}">
+      <span class="badge-emoji">${b.emoji}</span>
+      <div class="badge-name">${b.name}</div>
+      <div class="badge-desc">${b.desc}</div>
+      ${unlocked ? `<div class="badge-unlocked">✅ ${dateStr}</div>` : '<div class="text-xs">🔒 Da sbloccare</div>'}
+    </div>`;
+  }).join('');
+  document.getElementById('badgesGrid').innerHTML = html;
+  updateBadgeSidebarCount();
+}
+
+// ===== DIARY =====
+let diaryDebounce = null;
+function diaryToday() {
+  const d = today();
+  document.getElementById('diaryDate').value = dateKey(d);
+  loadDiaryEntry();
+}
+function loadDiaryEntry() {
+  const k = document.getElementById('diaryDate').value;
+  const d = new Date(k);
+  document.getElementById('diaryDayLabel').textContent = `${DAYS_IT[d.getDay()]}, ${d.getDate()} ${MONTHS_IT[d.getMonth()]} ${d.getFullYear()}`;
+  const entry = state.diary[k] || '';
+  document.getElementById('diaryEntry').value = entry;
+  document.getElementById('diaryCharCount').textContent = `${entry.length} caratteri`;
+  document.getElementById('diarySaveStatus').textContent = '';
+}
+function saveDiaryEntry() {
+  const k = document.getElementById('diaryDate').value;
+  const text = document.getElementById('diaryEntry').value;
+  document.getElementById('diaryCharCount').textContent = `${text.length} caratteri`;
+  clearTimeout(diaryDebounce);
+  diaryDebounce = setTimeout(() => {
+    state.diary[k] = text;
+    saveState();
+    document.getElementById('diarySaveStatus').textContent = '✅ Salvato';
+    setTimeout(() => document.getElementById('diarySaveStatus').textContent = '', 1500);
+    renderRecentDiary();
+  }, 600);
+}
+function renderRecentDiary() {
+  const entries = Object.entries(state.diary)
+    .filter(([,v]) => v.trim())
+    .sort(([a],[b]) => b.localeCompare(a)).slice(0,5);
+  if (!entries.length) { document.getElementById('recentDiaryEntries').innerHTML = '<div class="text-xs">Nessuna nota ancora. Inizia a scrivere!</div>'; return; }
+  let html = '';
+  entries.forEach(([k,v]) => {
+    const d = new Date(k);
+    html += `<div class="history-item">
+      <div style="flex:1">
+        <div class="text-xs" style="color:var(--accent)">${DAYS_IT[d.getDay()]} ${d.getDate()} ${MONTHS_IT[d.getMonth()]}</div>
+        <div style="font-size:13px;color:var(--text-secondary);margin-top:2px;line-height:1.5">${v.substring(0,120)}${v.length>120?'…':''}</div>
+      </div>
+      <button class="btn btn-glass btn-sm" onclick="document.getElementById('diaryDate').value='${k}';loadDiaryEntry();navigateTo('diary')">Apri</button>
+    </div>`;
+  });
+  document.getElementById('recentDiaryEntries').innerHTML = html;
+}
+
+// ===== NOTIFICATIONS =====
+function saveNotifSettings() {
+  state.notifs = {
+    notif1: document.getElementById('notif1').checked,
+    notif2: document.getElementById('notif2').checked,
+    notif3: document.getElementById('notif3').checked,
+    notifSound: document.getElementById('notifSound').checked
+  };
+  saveState();
+}
+function loadNotifSettings() {
+  if (state.notifs.notif1 !== undefined) document.getElementById('notif1').checked = state.notifs.notif1;
+  if (state.notifs.notif2 !== undefined) document.getElementById('notif2').checked = state.notifs.notif2;
+  if (state.notifs.notif3 !== undefined) document.getElementById('notif3').checked = state.notifs.notif3;
+  if (state.notifs.notifSound !== undefined) document.getElementById('notifSound').checked = state.notifs.notifSound;
+}
+
+// ===== TOAST =====
+function toast(msg, type = 'info') {
+  const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `<span class="toast-icon">${icons[type]}</span><span>${msg}</span>`;
+  document.getElementById('toastContainer').appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(40px)'; t.style.transition='0.3s'; setTimeout(()=>t.remove(),300); }, 3200);
+}
+
+// ===== RESET =====
+function resetAllData() {
+  localStorage.removeItem('egosTrain_state');
+  state = { workoutLog:{}, diary:{}, goals:{weeklyWorkouts:3,weeklyRuns:3}, customGoals:[], notifs:{notif1:true,notif2:true,notif3:false,notifSound:true}, badges:{}, bestStreak:0 };
+  renderDashboard(); toast('🗑 Dati eliminati', 'info');
+}
+
+// ===== INIT =====
 function init() {
-  updateHeaderDate();
-  updateHomeStats();
-  renderDayContent(activeDay);
-  renderWorkoutHistory();
-  updateIncomeMonthLabel();
-  updateIncomeTotal();
-  renderIncomeList();
-  renderCategoryChart();
+  loadState();
+  loadTheme();
+  loadNotifSettings();
+  renderDashboard();
+  renderWorkout();
+  setTimerMode('stopwatch');
+  calYear = today().getFullYear(); calMonth = today().getMonth();
 }
 
 init();

@@ -1,181 +1,511 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Dashboard personale — Allenamenti e Entrate" />
-  <title>La mia Dashboard</title>
-  <link rel="stylesheet" href="style.css" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>egosTrain</title>
+<link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body data-theme="light">
 
-  <!-- ── HEADER ── -->
-  <header class="site-header">
-    <div class="header-inner">
-      <span class="header-logo">◈</span>
-      <span class="header-title">La mia Dashboard</span>
-      <span class="header-date" id="headerDate"></span>
+<!-- Background Blobs -->
+<div class="bg-blobs">
+  <div class="blob blob1"></div>
+  <div class="blob blob2"></div>
+  <div class="blob blob3"></div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Exercise Guide Modal -->
+<div class="modal-overlay" id="exerciseModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modalExerciseName">Esercizio</div>
+        <div class="text-xs mt-1" id="modalMuscles"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal('exerciseModal')">✕</button>
     </div>
-  </header>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
 
-  <!-- ── HOMEPAGE ── -->
-  <main id="pageHome" class="page active">
+<!-- Day Detail Modal -->
+<div class="modal-overlay" id="dayModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="dayModalTitle">Dettagli Giornata</div>
+        <div class="text-xs mt-1" id="dayModalSub"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal('dayModal')">✕</button>
+    </div>
+    <div class="modal-body" id="dayModalBody"></div>
+  </div>
+</div>
 
-    <section class="hero">
-      <p class="hero-eyebrow">Benvenuto</p>
-      <h1 class="hero-heading">La mia<br>Dashboard</h1>
-      <p class="hero-sub">Allenamento e finanze in un posto solo.</p>
+<!-- App Shell -->
+<div class="app-shell">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="app-logo">eT</div>
+      <div>
+        <div class="app-name">egosTrain</div>
+        <div class="app-tagline">Il tuo coach personale</div>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Principale</div>
+      <div class="nav-item active" data-section="dashboard">
+        <span class="nav-icon">🏠</span> Dashboard
+      </div>
+      <div class="nav-item" data-section="calendar">
+        <span class="nav-icon">📅</span> Calendario
+      </div>
+      <div class="nav-item" data-section="workout">
+        <span class="nav-icon">💪</span> Allenamenti
+      </div>
+      <div class="nav-item" data-section="timer">
+        <span class="nav-icon">⏱️</span> Timer
+      </div>
+      <div class="nav-section-label" style="margin-top:8px">Progressi</div>
+      <div class="nav-item" data-section="stats">
+        <span class="nav-icon">📊</span> Statistiche
+      </div>
+      <div class="nav-item" data-section="goals">
+        <span class="nav-icon">🎯</span> Obiettivi
+      </div>
+      <div class="nav-item" data-section="badges">
+        <span class="nav-icon">🏆</span> Badge
+        <span class="nav-badge" id="sidebarBadgeCount">0</span>
+      </div>
+      <div class="nav-section-label" style="margin-top:8px">Personale</div>
+      <div class="nav-item" data-section="diary">
+        <span class="nav-icon">📓</span> Diario
+      </div>
+      <div class="nav-item" data-section="notifications">
+        <span class="nav-icon">🔔</span> Notifiche
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="theme-toggle" onclick="toggleTheme()">
+        <span id="themeIcon">🌙</span>
+        <span id="themeLabel">Tema Scuro</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content" id="mainContent">
+
+    <!-- DASHBOARD -->
+    <section class="section active" id="section-dashboard">
+      <div class="page-header">
+        <div>
+          <div class="page-title" id="dashTitle">Buongiorno 👋</div>
+          <div class="page-subtitle" id="dashDate"></div>
+        </div>
+        <div class="header-actions">
+          <span id="streakBadge" class="status-badge status-done" style="font-size:13px"></span>
+        </div>
+      </div>
+
+      <!-- Today Card -->
+      <div class="today-card" id="todayCard">
+        <div class="today-date" id="todayDateStr"></div>
+        <div class="today-day" id="todayDayName"></div>
+        <div class="today-quote" id="todayQuote"></div>
+        <div class="today-workout-label">Allenamento di oggi</div>
+        <div class="today-workout-name" id="todayWorkoutName"></div>
+        <div class="today-workout-detail" id="todayWorkoutDetail"></div>
+        <div class="today-actions" id="todayActions"></div>
+      </div>
+
+      <!-- Quick Stats -->
+      <div class="grid-4">
+        <div class="stat-card">
+          <div class="stat-icon">💪</div>
+          <div class="stat-value" id="statWorkouts">0</div>
+          <div class="stat-label">Allenamenti totali</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">🏃</div>
+          <div class="stat-value" id="statRuns">0</div>
+          <div class="stat-label">Corse totali</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">🔥</div>
+          <div class="stat-value" id="statStreak">0</div>
+          <div class="stat-label">Streak consecutivo</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">📅</div>
+          <div class="stat-value" id="statMonthPct">0%</div>
+          <div class="stat-label">Successo mensile</div>
+        </div>
+      </div>
+
+      <!-- Weekly Strip -->
+      <div class="card">
+        <div class="card-title">Settimana corrente</div>
+        <div class="weekly-strip" id="weeklyStrip"></div>
+        <div style="margin-top:14px">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-xs">Progresso settimanale</span>
+            <span class="text-xs ml-auto font-bold" id="weeklyPct">0%</span>
+          </div>
+          <div class="progress-track"><div class="progress-fill" id="weeklyBar" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <!-- Recent History -->
+      <div class="card">
+        <div class="card-title">Ultimi allenamenti</div>
+        <div id="recentHistory"></div>
+      </div>
     </section>
 
-    <section class="cards-grid">
-
-      <!-- Card Allenamenti -->
-      <article class="card" id="cardWorkout" tabindex="0" role="button" aria-label="Apri sezione Allenamenti">
-        <div class="card-icon">💪</div>
-        <div class="card-body">
-          <h2 class="card-title">Allenamenti</h2>
-          <p class="card-desc">Programma giornaliero, esercizi spiegati e tracker progressi.</p>
+    <!-- CALENDAR -->
+    <section class="section" id="section-calendar">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Calendario</div>
+          <div class="page-subtitle">Visualizza e pianifica le tue attività</div>
         </div>
-        <div class="card-arrow">→</div>
-        <div class="card-glow workout-glow"></div>
-      </article>
-
-      <!-- Card Entrate -->
-      <article class="card" id="cardIncome" tabindex="0" role="button" aria-label="Apri sezione Entrate">
-        <div class="card-icon">💶</div>
-        <div class="card-body">
-          <h2 class="card-title">Entrate</h2>
-          <p class="card-desc">Visualizza guadagni mensili, aggiungi movimenti, tieni traccia.</p>
+      </div>
+      <div class="card">
+        <div class="calendar-nav">
+          <button class="cal-nav-btn" onclick="calNav(-1)">‹</button>
+          <div class="cal-title" id="calTitle"></div>
+          <button class="cal-nav-btn" onclick="calNav(1)">›</button>
         </div>
-        <div class="card-arrow">→</div>
-        <div class="card-glow income-glow"></div>
-      </article>
-
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
+      <div class="grid-3">
+        <div class="card" style="text-align:center">
+          <div style="font-size:24px;margin-bottom:6px">💪</div>
+          <div class="text-sm font-bold">Forza</div>
+          <div class="text-xs">Lun / Mer / Ven</div>
+        </div>
+        <div class="card" style="text-align:center">
+          <div style="font-size:24px;margin-bottom:6px">🏃</div>
+          <div class="text-sm font-bold">Corsa</div>
+          <div class="text-xs">Mar / Gio / Sab</div>
+        </div>
+        <div class="card" style="text-align:center">
+          <div style="font-size:24px;margin-bottom:6px">😴</div>
+          <div class="text-sm font-bold">Riposo</div>
+          <div class="text-xs">Domenica</div>
+        </div>
+      </div>
     </section>
 
-    <!-- Quick stats strip -->
-    <section class="stats-strip" id="statsStrip">
-      <div class="stat-item">
-        <span class="stat-value" id="statWorkouts">0</span>
-        <span class="stat-label">Allenamenti</span>
+    <!-- WORKOUT -->
+    <section class="section" id="section-workout">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Piano Allenamento</div>
+          <div class="page-subtitle">Il tuo programma settimanale completo</div>
+        </div>
       </div>
-      <div class="stat-divider"></div>
-      <div class="stat-item">
-        <span class="stat-value" id="statStreak">0</span>
-        <span class="stat-label">Giorni di fila</span>
+      <!-- Day tabs -->
+      <div style="display:flex;gap:6px;flex-wrap:wrap" id="workoutDayTabs"></div>
+      <!-- Day content -->
+      <div id="workoutDayContent"></div>
+    </section>
+
+    <!-- TIMER -->
+    <section class="section" id="section-timer">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Timer</div>
+          <div class="page-subtitle">Cronometro, timer recupero e personalizzato</div>
+        </div>
       </div>
-      <div class="stat-divider"></div>
-      <div class="stat-item">
-        <span class="stat-value" id="statIncome">€ 0</span>
-        <span class="stat-label">Entrate mese</span>
+      <!-- Timer modes -->
+      <div class="card" style="text-align:center">
+        <div class="timer-presets">
+          <button class="preset-btn active" onclick="setTimerMode('stopwatch')">⏱ Cronometro</button>
+          <button class="preset-btn" onclick="setTimerMode('countdown')">⏳ Conto alla rovescia</button>
+          <button class="preset-btn" onclick="setTimerMode('rest')">💤 Recupero</button>
+        </div>
+        <div class="timer-circle">
+          <svg viewBox="0 0 220 220" width="220" height="220">
+            <defs>
+              <linearGradient id="timerGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" style="stop-color:#2563eb"/>
+                <stop offset="100%" style="stop-color:#7c3aed"/>
+              </linearGradient>
+            </defs>
+            <circle class="timer-circle-bg" cx="110" cy="110" r="96"/>
+            <circle class="timer-circle-fill" id="timerCircle" cx="110" cy="110" r="96"
+              stroke-dasharray="603" stroke-dashoffset="603"/>
+          </svg>
+          <div class="timer-center">
+            <div class="timer-mode-label" id="timerModeLabel">CRONOMETRO</div>
+            <div class="timer-display" id="timerDisplay">00:00</div>
+          </div>
+        </div>
+        <!-- Countdown presets -->
+        <div class="timer-presets" id="countdownPresets" style="display:none">
+          <button class="preset-btn" onclick="setCountdown(60)">1 min</button>
+          <button class="preset-btn" onclick="setCountdown(90)">1:30</button>
+          <button class="preset-btn" onclick="setCountdown(120)">2 min</button>
+          <button class="preset-btn" onclick="setCountdown(180)">3 min</button>
+          <button class="preset-btn" onclick="setCountdown(300)">5 min</button>
+        </div>
+        <div id="restPresets" style="display:none" class="timer-presets">
+          <button class="preset-btn" onclick="setCountdown(30)">30 sec</button>
+          <button class="preset-btn" onclick="setCountdown(60)">60 sec</button>
+          <button class="preset-btn" onclick="setCountdown(90)">90 sec</button>
+          <button class="preset-btn" onclick="setCountdown(120)">2 min</button>
+        </div>
+        <div id="customTimerWrap" style="display:none;margin-bottom:12px;justify-content:center;gap:8px;flex-wrap:wrap" class="flex">
+          <input type="number" id="customMin" class="input-field" placeholder="Min" style="width:80px;text-align:center" min="0" max="99" value="1">
+          <input type="number" id="customSec" class="input-field" placeholder="Sec" style="width:80px;text-align:center" min="0" max="59" value="30">
+          <button class="btn btn-glass" onclick="setCustomCountdown()">Imposta</button>
+        </div>
+        <div class="timer-controls">
+          <button class="btn btn-primary" id="timerStartBtn" onclick="timerToggle()">▶ Avvia</button>
+          <button class="btn btn-glass" onclick="timerReset()">↺ Reset</button>
+          <button class="btn btn-glass" onclick="timerLap()" id="timerLapBtn">📌 Giro</button>
+        </div>
+        <div id="lapsContainer" style="margin-top:14px;text-align:left"></div>
+      </div>
+    </section>
+
+    <!-- STATS -->
+    <section class="section" id="section-stats">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Statistiche</div>
+          <div class="page-subtitle">I tuoi progressi nel tempo</div>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Allenamenti mensili</div>
+          <div class="chart-bar-container" id="monthlyChart"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Corse mensili</div>
+          <div class="chart-bar-container" id="runsChart"></div>
+        </div>
+      </div>
+      <div class="grid-4">
+        <div class="stat-card">
+          <div class="stat-icon">💪</div>
+          <div class="stat-value" id="s_workouts">0</div>
+          <div class="stat-label">Allenamenti totali</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">🏃</div>
+          <div class="stat-value" id="s_runs">0</div>
+          <div class="stat-label">Corse totali</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">🔥</div>
+          <div class="stat-value" id="s_streak">0</div>
+          <div class="stat-label">Streak massimo</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">😴</div>
+          <div class="stat-value" id="s_rest">0</div>
+          <div class="stat-label">Giorni riposo</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">📅</div>
+          <div class="stat-value" id="s_monthPct">0%</div>
+          <div class="stat-label">Successo mensile</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">📆</div>
+          <div class="stat-value" id="s_yearPct">0%</div>
+          <div class="stat-label">Successo annuale</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">⏰</div>
+          <div class="stat-value" id="s_time">0h</div>
+          <div class="stat-label">Tempo stimato</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">✅</div>
+          <div class="stat-value" id="s_streak_cur">0</div>
+          <div class="stat-label">Streak attuale</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- GOALS -->
+    <section class="section" id="section-goals">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Obiettivi</div>
+          <div class="page-subtitle">Imposta e monitora i tuoi target</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="saveGoals()">💾 Salva</button>
+      </div>
+      <div class="card">
+        <div class="card-title">Obiettivi settimanali</div>
+        <div id="goalsContainer"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Obiettivo personalizzato</div>
+        <div class="form-group">
+          <label class="input-label">Descrizione obiettivo</label>
+          <input type="text" class="input-field" id="customGoalText" placeholder="Es: Completare 4 allenamenti a settimana">
+        </div>
+        <div class="form-group">
+          <label class="input-label">Scadenza</label>
+          <input type="date" class="input-field" id="customGoalDate">
+        </div>
+        <button class="btn btn-primary" onclick="addCustomGoal()">➕ Aggiungi obiettivo</button>
+        <div id="customGoalsList" style="margin-top:14px"></div>
+      </div>
+    </section>
+
+    <!-- BADGES -->
+    <section class="section" id="section-badges">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Badge & Risultati</div>
+          <div class="page-subtitle">I tuoi traguardi conquistati</div>
+        </div>
+        <span id="badgeUnlockedCount" class="status-badge status-done">0 sbloccati</span>
+      </div>
+      <div class="card">
+        <div class="badges-grid" id="badgesGrid"></div>
+      </div>
+    </section>
+
+    <!-- DIARY -->
+    <section class="section" id="section-diary">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Diario</div>
+          <div class="page-subtitle">Le tue note quotidiane</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="diary-date-select">
+          <input type="date" class="input-field" id="diaryDate" style="max-width:200px" onchange="loadDiaryEntry()">
+          <button class="btn btn-glass btn-sm" onclick="diaryToday()">📅 Oggi</button>
+        </div>
+        <div class="card-title" id="diaryDayLabel"></div>
+        <textarea class="diary-textarea" id="diaryEntry" placeholder="Come ti sei sentito oggi? Difficoltà incontrate, progressi ottenuti..." oninput="saveDiaryEntry()"></textarea>
+        <div class="flex items-center gap-2 mt-1">
+          <span class="text-xs" id="diarySaveStatus" style="color:var(--success)"></span>
+          <span class="text-xs ml-auto" id="diaryCharCount">0 caratteri</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Note recenti</div>
+        <div id="recentDiaryEntries"></div>
+      </div>
+    </section>
+
+    <!-- NOTIFICATIONS -->
+    <section class="section" id="section-notifications">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Notifiche</div>
+          <div class="page-subtitle">Gestisci i tuoi promemoria</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Promemoria</div>
+        <div class="notif-row">
+          <div>
+            <div class="text-sm font-bold">Allenamento mattutino</div>
+            <div class="text-xs">Promemoria allenamento giornaliero</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="notif1" checked onchange="saveNotifSettings()">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="notif-row">
+          <div>
+            <div class="text-sm font-bold">Corsa programmata</div>
+            <div class="text-xs">Nei giorni di corsa</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="notif2" checked onchange="saveNotifSettings()">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="notif-row">
+          <div>
+            <div class="text-sm font-bold">Obiettivi giornalieri</div>
+            <div class="text-xs">Riepilogo serale dei progressi</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="notif3" onchange="saveNotifSettings()">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="notif-row">
+          <div>
+            <div class="text-sm font-bold">Suono timer</div>
+            <div class="text-xs">Notifica sonora al termine timer</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="notifSound" checked onchange="saveNotifSettings()">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Informazioni app</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div class="flex items-center gap-3">
+            <div class="app-logo">eT</div>
+            <div>
+              <div class="text-sm font-bold">egosTrain v1.0</div>
+              <div class="text-xs">Il tuo coach personale premium</div>
+            </div>
+          </div>
+          <div class="text-xs" style="color:var(--text-muted);line-height:1.6">
+            Tutti i dati sono salvati localmente sul tuo dispositivo. Nessun server, nessuna registrazione, funzionamento completamente offline.
+          </div>
+          <button class="btn btn-danger btn-sm" onclick="if(confirm('Sei sicuro? Tutti i dati verranno eliminati.'))resetAllData()">🗑 Reset dati</button>
+        </div>
       </div>
     </section>
 
   </main>
+</div>
 
-  <!-- ── PAGINA ALLENAMENTI ── -->
-  <main id="pageWorkout" class="page">
-
-    <div class="page-header">
-      <button class="back-btn" data-target="pageHome">← Indietro</button>
-      <h1 class="page-title">Allenamenti</h1>
+<!-- Mobile Bottom Nav -->
+<nav class="mobile-nav">
+  <div class="mobile-nav-items">
+    <div class="mobile-nav-item active" data-section="dashboard">
+      <span class="nav-icon">🏠</span>Casa
     </div>
-
-    <!-- Selezione giorno -->
-    <div class="day-tabs" role="tablist" aria-label="Giorni della settimana">
-      <button class="day-tab active" data-day="0" role="tab">Lun</button>
-      <button class="day-tab" data-day="1" role="tab">Mar</button>
-      <button class="day-tab" data-day="2" role="tab">Mer</button>
-      <button class="day-tab" data-day="3" role="tab">Gio</button>
-      <button class="day-tab" data-day="4" role="tab">Ven</button>
-      <button class="day-tab" data-day="5" role="tab">Sab</button>
-      <button class="day-tab" data-day="6" role="tab">Dom</button>
+    <div class="mobile-nav-item" data-section="calendar">
+      <span class="nav-icon">📅</span>Cal
     </div>
-
-    <!-- Contenuto giorno -->
-    <div id="dayContent" class="day-content"></div>
-
-    <!-- Storico completamenti -->
-    <div class="section-block">
-      <h2 class="section-heading">Storico</h2>
-      <div id="workoutHistory" class="history-list"></div>
+    <div class="mobile-nav-item" data-section="workout">
+      <span class="nav-icon">💪</span>Workout
     </div>
-
-  </main>
-
-  <!-- ── PAGINA ENTRATE ── -->
-  <main id="pageIncome" class="page">
-
-    <div class="page-header">
-      <button class="back-btn" data-target="pageHome">← Indietro</button>
-      <h1 class="page-title">Entrate</h1>
+    <div class="mobile-nav-item" data-section="timer">
+      <span class="nav-icon">⏱️</span>Timer
     </div>
-
-    <!-- Totale mese -->
-    <div class="income-hero">
-      <p class="income-eyebrow" id="incomeMonthLabel"></p>
-      <p class="income-total" id="incomeTotal">€ 0,00</p>
-      <p class="income-sub">totale del mese corrente</p>
+    <div class="mobile-nav-item" data-section="stats">
+      <span class="nav-icon">📊</span>Stats
     </div>
-
-    <!-- Form aggiungi -->
-    <div class="section-block">
-      <h2 class="section-heading">Aggiungi movimento</h2>
-      <form class="income-form" id="incomeForm" novalidate>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label" for="incomeDesc">Descrizione</label>
-            <input class="form-input" id="incomeDesc" type="text" placeholder="Es. Stipendio, Freelance…" maxlength="60" required />
-          </div>
-          <div class="form-group form-group--small">
-            <label class="form-label" for="incomeAmount">Importo (€)</label>
-            <input class="form-input" id="incomeAmount" type="number" placeholder="0.00" min="0" step="0.01" required />
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label" for="incomeDate">Data</label>
-            <input class="form-input" id="incomeDate" type="date" required />
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="incomeCategory">Categoria</label>
-            <select class="form-input form-select" id="incomeCategory">
-              <option value="lavoro">💼 Lavoro</option>
-              <option value="freelance">💻 Freelance</option>
-              <option value="investimenti">📈 Investimenti</option>
-              <option value="altro">📦 Altro</option>
-            </select>
-          </div>
-        </div>
-        <button class="btn-primary" type="submit">Aggiungi entrata</button>
-      </form>
-    </div>
-
-    <!-- Lista movimenti -->
-    <div class="section-block">
-      <div class="section-heading-row">
-        <h2 class="section-heading">Movimenti</h2>
-        <button class="btn-ghost btn-small" id="clearIncomeBtn">Cancella tutto</button>
-      </div>
-      <div id="incomeList" class="income-list"></div>
-    </div>
-
-    <!-- Grafico categorie -->
-    <div class="section-block">
-      <h2 class="section-heading">Per categoria</h2>
-      <div id="categoryChart" class="category-chart"></div>
-    </div>
-
-  </main>
-
-  <!-- ── MODAL ESERCIZIO ── -->
-  <div id="exerciseModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-    <div class="modal-box">
-      <button class="modal-close" id="modalClose" aria-label="Chiudi">✕</button>
-      <div id="modalContent"></div>
+    <div class="mobile-nav-item" data-section="diary">
+      <span class="nav-icon">📓</span>Diario
     </div>
   </div>
+</nav>
 
-  <script src="script.js"></script>
+<script src="script.js"></script>
 </body>
 </html>
