@@ -20,6 +20,40 @@
 <!-- Toast Container -->
 <div class="toast-container" id="toastContainer"></div>
 
+<!-- XP Gain Popup -->
+<div class="xp-popup" id="xpPopup">+0 XP</div>
+
+<!-- Level Up Modal -->
+<div class="modal-overlay" id="levelUpModal">
+  <div class="modal levelup-modal">
+    <div class="levelup-content" id="levelUpContent"></div>
+  </div>
+</div>
+
+<!-- Cuori esauriti Modal -->
+<div class="modal-overlay" id="heartsModal">
+  <div class="modal" style="text-align:center;padding:36px 28px">
+    <div style="font-size:64px;margin-bottom:14px">💔</div>
+    <div class="modal-title" style="margin-bottom:10px">Cuori esauriti!</div>
+    <div class="text-sm" style="color:var(--text-secondary);line-height:1.6;margin-bottom:22px">Hai perso tutti i cuori saltando gli allenamenti.<br>Completa un workout per recuperarne uno! 💪</div>
+    <button class="btn btn-primary" onclick="closeModal('heartsModal')">Capito, ci riprovo!</button>
+  </div>
+</div>
+
+<!-- Mobile XP strip (top bar) -->
+<div class="mobile-xp-strip" id="mobileXpStrip">
+  <div class="mxp-badge" id="mxpBadge">1</div>
+  <div class="mxp-bar-wrap">
+    <div class="mxp-label"><span id="mxpLevelName">Principiante</span><span id="mxpXpText">0/100</span></div>
+    <div class="gam-xp-track"><div class="gam-xp-fill" id="mxpFill" style="width:0%"></div></div>
+  </div>
+  <div class="mxp-pills">
+    <div class="mxp-pill">🔥<span id="mxpStreak">0</span></div>
+    <div class="mxp-pill">❤️<span id="mxpHearts">5</span></div>
+    <div class="mxp-pill">💎<span id="mxpGems">0</span></div>
+  </div>
+</div>
+
 <!-- Exercise Guide Modal -->
 <div class="modal-overlay" id="exerciseModal">
   <div class="modal">
@@ -58,6 +92,23 @@
       <div>
         <div class="app-name">egosTrain</div>
         <div class="app-tagline">Il tuo coach personale</div>
+      </div>
+    </div>
+
+    <!-- GAMIFICATION HUD -->
+    <div class="gam-hud">
+      <div class="gam-level-row">
+        <div class="gam-level-badge" id="hudLevelBadge">1</div>
+        <div class="gam-level-info">
+          <div class="gam-level-label" id="hudLevelName">Principiante</div>
+          <div class="gam-xp-track"><div class="gam-xp-fill" id="hudXpFill" style="width:0%"></div></div>
+          <div class="gam-xp-text" id="hudXpText">0 / 100 XP</div>
+        </div>
+      </div>
+      <div class="gam-stats-row">
+        <div class="gam-stat-pill"><span class="gam-stat-icon">🔥</span><span id="hudStreakVal">0</span></div>
+        <div class="gam-stat-pill"><span class="gam-stat-icon">❤️</span><span id="hudHeartsVal">5</span></div>
+        <div class="gam-stat-pill"><span class="gam-stat-icon">💎</span><span id="hudGemsVal">0</span></div>
       </div>
     </div>
     <nav class="sidebar-nav">
@@ -125,6 +176,25 @@
         <div class="today-workout-name" id="todayWorkoutName"></div>
         <div class="today-workout-detail" id="todayWorkoutDetail"></div>
         <div class="today-actions" id="todayActions"></div>
+      </div>
+
+      <!-- XP Dashboard Card -->
+      <div class="card xp-dash-card">
+        <div class="xp-dash-left">
+          <div class="xp-dash-badge" id="dashLevelBadge">1</div>
+          <div>
+            <div class="xp-dash-levelname" id="dashLevelName">Principiante</div>
+            <div class="xp-dash-sub" id="dashXpSub">0 / 100 XP al prossimo livello</div>
+          </div>
+        </div>
+        <div class="xp-dash-pills">
+          <div class="gam-stat-pill"><span>🔥</span><span id="dashStreakVal2">0</span></div>
+          <div class="gam-stat-pill"><span>❤️</span><span id="dashHeartsVal2">5</span></div>
+          <div class="gam-stat-pill"><span>💎</span><span id="dashGemsVal2">0</span></div>
+        </div>
+        <div class="xp-dash-track-wrap">
+          <div class="gam-xp-track" style="height:10px"><div class="gam-xp-fill" id="dashXpFill2" style="width:0%"></div></div>
+        </div>
       </div>
 
       <!-- Quick Stats -->

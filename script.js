@@ -481,11 +481,38 @@ function renderRecentHistory() {
 }
 
 function setTodayStatus(status) {
-  state.workoutLog[todayKey()] = status;
+  const tk = todayKey();
+  const prevStatus = state.workoutLog[tk];
+  state.workoutLog[tk] = status;
   saveState();
   renderDashboard();
   checkBadges();
-  toast(status === 'done' ? '🎉 Ottimo lavoro! Allenamento completato!' : '📝 Allenamento registrato come saltato', status === 'done' ? 'success' : 'info');
+
+  if (status === 'done' && prevStatus !== 'done') {
+    // XP guadagnato
+    const dow = today().getDay();
+    const plan = WORKOUT_PLAN[dow];
+    const isFirst = totalWorkouts() === 1;
+    const xpAmount = isFirst ? XP_REWARDS.first_workout :
+                     plan.type === 'run' ? XP_REWARDS.run_done : XP_REWARDS.workout_done;
+    addXP(xpAmount, 'workout');
+    // Recupera cuore se ne mancano
+    if (state.gam.hearts < MAX_HEARTS) gainHeart();
+    // Streak bonus
+    const streak = calcStreak();
+    if (streak === 7)  { setTimeout(() => { addXP(XP_REWARDS.streak_7, 'streak7'); toast('🔥 Streak di 7 giorni! +100 XP bonus!', 'success'); }, 800); }
+    if (streak === 30) { setTimeout(() => { addXP(XP_REWARDS.streak_30, 'streak30'); toast('💎 Streak di 30 giorni! +500 XP BONUS!', 'success'); }, 800); }
+    toast('🎉 +' + xpAmount + ' XP! Ottimo lavoro!', 'success');
+  } else if (status === 'skip' && prevStatus !== 'skip') {
+    loseHeart();
+    toast('💔 Cuore perso! Non saltare troppo...', 'info');
+  } else if (status === 'done' && prevStatus === 'done') {
+    // annulla
+  } else {
+    toast('📝 Allenamento registrato come saltato', 'info');
+  }
+
+  renderGamHUD();
 }
 
 // ===== CALENDAR =====
@@ -563,10 +590,25 @@ function openDayModal(dateStr) {
   openModal('dayModal');
 }
 function setDayStatus(dateStr, status) {
+  const prevStatus = state.workoutLog[dateStr];
   state.workoutLog[dateStr] = status;
   saveState(); renderCalendar(); renderDashboard(); checkBadges();
   closeModal('dayModal');
-  toast(status==='done'?'✅ Registrato come completato':'❌ Registrato come saltato', status==='done'?'success':'info');
+
+  if (status === 'done' && prevStatus !== 'done') {
+    const d = parseKey(dateStr);
+    const plan = WORKOUT_PLAN[d.getDay()];
+    const xpAmount = plan.type === 'run' ? XP_REWARDS.run_done : XP_REWARDS.workout_done;
+    addXP(xpAmount, 'workout_cal');
+    if (state.gam.hearts < MAX_HEARTS) gainHeart();
+    toast('✅ +' + xpAmount + ' XP! Registrato come completato', 'success');
+  } else if (status === 'skip' && prevStatus !== 'skip') {
+    loseHeart();
+    toast('❌ Cuore perso! Registrato come saltato', 'info');
+  } else {
+    toast(status==='done'?'✅ Registrato come completato':'❌ Registrato come saltato', status==='done'?'success':'info');
+  }
+  renderGamHUD();
 }
 
 // ===== WORKOUT =====
@@ -1024,8 +1066,10 @@ function saveDiaryEntry() {
   document.getElementById('diaryCharCount').textContent = `${text.length} caratteri`;
   clearTimeout(diaryDebounce);
   diaryDebounce = setTimeout(() => {
+    const isNew = !state.diary[k] || state.diary[k].trim() === '';
     state.diary[k] = text;
     saveState();
+    if (isNew && text.trim().length > 20) { addXP(XP_REWARDS.diary_entry, 'diary'); }
     document.getElementById('diarySaveStatus').textContent = '✅ Salvato';
     setTimeout(() => document.getElementById('diarySaveStatus').textContent = '', 1500);
     renderRecentDiary();
@@ -1084,15 +1128,194 @@ function resetAllData() {
   renderDashboard(); toast('🗑 Dati eliminati', 'info');
 }
 
+
+// ===== GAMIFICATION SYSTEM =====
+
+// Livelli: ogni livello richiede XP cumulativo
+const LEVELS = [
+  { level:1,  name:'Principiante',  xpNeeded:0,    emoji:'🌱', bonus:'5 💎' },
+  { level:2,  name:'Atleta Junior', xpNeeded:100,  emoji:'🏃', bonus:'10 💎' },
+  { level:3,  name:'Guerriero',     xpNeeded:250,  emoji:'⚔️', bonus:'15 💎 + ❤️ extra' },
+  { level:4,  name:'Campione',      xpNeeded:500,  emoji:'🥊', bonus:'20 💎' },
+  { level:5,  name:'Maestro',       xpNeeded:850,  emoji:'🏆', bonus:'30 💎 + ❤️ extra' },
+  { level:6,  name:'Leggenda',      xpNeeded:1300, emoji:'⭐', bonus:'50 💎' },
+  { level:7,  name:'Semidio',       xpNeeded:2000, emoji:'⚡', bonus:'75 💎 + ❤️ extra' },
+  { level:8,  name:'Immortale',     xpNeeded:3000, emoji:'🦅', bonus:'100 💎' },
+  { level:9,  name:'Titano',        xpNeeded:4500, emoji:'🌋', bonus:'150 💎' },
+  { level:10, name:'egosTitan',     xpNeeded:6500, emoji:'👑', bonus:'200 💎 + cuori infiniti' },
+];
+
+// XP guadagnato per azione
+const XP_REWARDS = {
+  workout_done:   50,   // allenamento forza completato
+  run_done:       40,   // corsa completata
+  streak_7:       100,  // 7 giorni consecutivi
+  streak_30:      500,  // 30 giorni consecutivi
+  diary_entry:    10,   // nota diario salvata
+  goal_complete:  80,   // obiettivo completato
+  first_workout:  150,  // primo allenamento in assoluto
+};
+
+const MAX_HEARTS = 5;
+
+// ── Inizializza stato gamification ──
+if (!state.gam) {
+  state.gam = {
+    xp: 0,
+    level: 1,
+    hearts: MAX_HEARTS,
+    gems: 0,
+    streakFreeze: false,
+    lastHeartRecover: null, // data ultima perdita cuore
+  };
+}
+
+function getLevelInfo(xp) {
+  let current = LEVELS[0];
+  let next = LEVELS[1];
+  for (let i = LEVELS.length - 1; i >= 0; i--) {
+    if (xp >= LEVELS[i].xpNeeded) { current = LEVELS[i]; next = LEVELS[i+1] || null; break; }
+  }
+  const xpInLevel = xp - current.xpNeeded;
+  const xpToNext  = next ? next.xpNeeded - current.xpNeeded : 1;
+  const pct       = next ? Math.min(100, Math.round(xpInLevel / xpToNext * 100)) : 100;
+  return { current, next, xpInLevel, xpToNext, pct };
+}
+
+function addXP(amount, reason) {
+  const g = state.gam;
+  const prevLevel = getLevelInfo(g.xp).current.level;
+  g.xp += amount;
+  const newInfo = getLevelInfo(g.xp);
+  const newLevel = newInfo.current.level;
+
+  saveState();
+  renderGamHUD();
+  showXpPopup(amount);
+
+  // Level up?
+  if (newLevel > prevLevel) {
+    setTimeout(() => showLevelUpModal(newInfo.current, newInfo.next), 400);
+    // Bonus gemme
+    g.gems += parseInt(newInfo.current.bonus) || 10;
+    // Alcuni livelli danno cuore extra
+    if (newInfo.current.bonus && newInfo.current.bonus.includes('❤️')) {
+      g.hearts = Math.min(MAX_HEARTS + 1, g.hearts + 1);
+    }
+    saveState();
+  }
+}
+
+function loseHeart() {
+  const g = state.gam;
+  if (g.hearts <= 0) { openModal('heartsModal'); return; }
+  g.hearts = Math.max(0, g.hearts - 1);
+  state.gam.lastHeartRecover = todayKey();
+  saveState();
+  renderGamHUD();
+  const el = document.getElementById('hudHeartsVal');
+  if (el) { el.classList.add('heart-lost'); setTimeout(() => el.classList.remove('heart-lost'), 400); }
+  if (g.hearts === 0) { setTimeout(() => openModal('heartsModal'), 600); }
+}
+
+function gainHeart() {
+  const g = state.gam;
+  if (g.hearts >= MAX_HEARTS) return;
+  g.hearts++;
+  saveState();
+  renderGamHUD();
+  const el = document.getElementById('hudHeartsVal');
+  if (el) { el.classList.add('heart-gained'); setTimeout(() => el.classList.remove('heart-gained'), 500); }
+}
+
+function showXpPopup(amount) {
+  const el = document.getElementById('xpPopup');
+  if (!el) return;
+  el.textContent = '+' + amount + ' XP';
+  el.classList.remove('show');
+  void el.offsetWidth; // reflow
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 1500);
+}
+
+function showLevelUpModal(lvl, next) {
+  const content = document.getElementById('levelUpContent');
+  if (!content) return;
+  const nextHTML = next
+    ? `<div class="levelup-reward">🎯 Prossimo: ${next.name}</div>`
+    : `<div class="levelup-reward">👑 Livello massimo!</div>`;
+  content.innerHTML = `
+    <span class="levelup-emoji">${lvl.emoji}</span>
+    <div class="levelup-title">Livello raggiunto!</div>
+    <div class="levelup-level">Livello ${lvl.level}</div>
+    <div class="levelup-name">${lvl.name}</div>
+    <div class="levelup-rewards">
+      <div class="levelup-reward">🎁 ${lvl.bonus}</div>
+      ${nextHTML}
+    </div>
+    <button class="btn btn-primary" onclick="closeModal('levelUpModal')" style="width:100%;justify-content:center">Fantastico! 🎉</button>
+  `;
+  openModal('levelUpModal');
+}
+
+function renderGamHUD() {
+  const g = state.gam;
+  const streak = calcStreak();
+  const info = getLevelInfo(g.xp);
+  const lvl = info.current;
+
+  const ids = {
+    badge:   ['hudLevelBadge','dashLevelBadge','mxpBadge'],
+    name:    ['hudLevelName','dashLevelName','mxpLevelName'],
+    xpFill:  ['hudXpFill','dashXpFill2','mxpFill'],
+    xpText:  ['hudXpText','mxpXpText'],
+    streak:  ['hudStreakVal','dashStreakVal2','mxpStreak'],
+    hearts:  ['hudHeartsVal','dashHeartsVal2','mxpHearts'],
+    gems:    ['hudGemsVal','dashGemsVal2'],
+  };
+
+  const setAll = (keys, val, attr='textContent') => keys.forEach(id => {
+    const el = document.getElementById(id); if (el) el[attr] = val;
+  });
+
+  setAll(ids.badge, lvl.level);
+  setAll(ids.name, lvl.name);
+  setAll(ids.xpFill, info.pct + '%', 'style.width'); // fix below
+  ids.xpFill.forEach(id => {
+    const el = document.getElementById(id); if (el) el.style.width = info.pct + '%';
+  });
+  ids.xpText.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = info.next
+      ? (info.xpInLevel + ' / ' + info.xpToNext + ' XP')
+      : 'MAX';
+  });
+  const dashSub = document.getElementById('dashXpSub');
+  if (dashSub) dashSub.textContent = info.next
+    ? (info.xpInLevel + ' / ' + info.xpToNext + ' XP al prossimo livello')
+    : '🏆 Livello massimo!';
+
+  setAll(ids.streak, streak);
+  setAll(ids.hearts, g.hearts);
+  setAll(ids.gems, g.gems);
+
+  // Streak badge dashboard
+  const sb = document.getElementById('streakBadge');
+  if (sb) sb.textContent = '🔥 ' + streak + ' giorni';
+}
+
 // ===== INIT =====
 function init() {
   loadState();
+  // Assicura che stato gamification esista
+  if (!state.gam) state.gam = { xp:0, level:1, hearts:MAX_HEARTS, gems:0, streakFreeze:false, lastHeartRecover:null };
   loadTheme();
   loadNotifSettings();
   renderDashboard();
   renderWorkout();
   setTimerMode('stopwatch');
   calYear = today().getFullYear(); calMonth = today().getMonth();
+  renderGamHUD();
 }
 
 init();
